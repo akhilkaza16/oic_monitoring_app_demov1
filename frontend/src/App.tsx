@@ -3,6 +3,8 @@ import { NavBar } from "./components/NavBar";
 import ExecutiveDashboardPage from "./pages/ExecutiveDashboardPage";
 import IntegrationDetailPage from "./pages/IntegrationDetailPage";
 import IntegrationsPage from "./pages/IntegrationsPage";
+import NotificationsPage from "./pages/NotificationsPage";
+import SecurityPage from "./pages/SecurityPage";
 import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
@@ -15,6 +17,8 @@ export default function App() {
           <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/integrations/:integrationId" element={<IntegrationDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/security" element={<SecurityPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

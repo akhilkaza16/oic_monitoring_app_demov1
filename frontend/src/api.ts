@@ -9,8 +9,13 @@ import {
   IntegrationDetailResponse,
   IntegrationListResponse,
   LatencyLog,
+  PasswordResetConfirmPayload,
+  PasswordResetRequestPayload,
+  PasswordResetRequestResponse,
   SettingsPayload,
+  SessionRevokeResponse,
   TrendSnapshot,
+  WebhookDeliveryLogResponse,
 } from "./types";
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL;
@@ -18,43 +23,50 @@ const API_BASE = process.env.REACT_APP_BACKEND_URL;
 if (!API_BASE) {
   throw new Error("REACT_APP_BACKEND_URL is required in frontend/.env");
 }
-
-const ADMIN_TOKEN_STORAGE_KEY = "badger-admin-token";
-
-export function getStoredAdminToken(): string | null {
-  return window.sessionStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+function getCookieValue(name: string): string | null {
+  const cookies = document.cookie.split(";").map((cookie) => cookie.trim());
+  const target = cookies.find((cookie) => cookie.startsWith(`${name}=`));
+  return target ? decodeURIComponent(target.split("=", 2)[1]) : null;
 }
 
-export function setStoredAdminToken(token: string): void {
-  window.sessionStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
-}
-
-export function clearStoredAdminToken(): void {
-  window.sessionStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
-}
-
-interface RequestOptions extends RequestInit {
-  authToken?: string | null;
-}
-
-async function request<T>(path: string, init?: RequestOptions): Promise<T> {
-  const { authToken, ...restInit } = init ?? {};
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const restInit = init ?? {};
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((restInit.headers as Record<string, string> | undefined) ?? {}),
   };
-  if (authToken) {
-    headers.Authorization = `Bearer ${authToken}`;
+
+  const method = (restInit.method ?? "GET").toUpperCase();
+  const csrfProtectedMethods = ["POST", "PUT", "PATCH", "DELETE"];
+  if (csrfProtectedMethods.includes(method)) {
+    const csrfToken = getCookieValue("csrf_token");
+    if (csrfToken) {
+      headers["X-CSRF-Token"] = csrfToken;
+    }
   }
 
   const response = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
     headers,
     ...restInit,
   });
 
   if (!response.ok) {
-    const details = await response.text();
-    throw new Error(`Request failed: ${response.status} ${details}`);
+    const contentType = response.headers.get("content-type") || "";
+    let details = "";
+    if (contentType.includes("application/json")) {
+      const payload = (await response.json()) as { detail?: string | Record<string, unknown> };
+      if (typeof payload.detail === "string") {
+        details = payload.detail;
+      } else if (payload.detail) {
+        details = JSON.stringify(payload.detail);
+      }
+    } else {
+      details = await response.text();
+    }
+
+    const message = details ? `${response.status}: ${details}` : `Request failed with status ${response.status}`;
+    throw new Error(message);
   }
 
   return (await response.json()) as T;
@@ -100,15 +112,14 @@ export function getLatencyLogs(endpoint?: string, limit = 20): Promise<LatencyLo
   return request<LatencyLog[]>(`/api/latency-logs?${params.toString()}`);
 }
 
-export function runMockCollectorCycle(authToken?: string | null): Promise<{ updated_integrations: number }> {
+export function runMockCollectorCycle(): Promise<{ updated_integrations: number }> {
   return request<{ updated_integrations: number }>("/api/mock-collector/run", {
     method: "POST",
-    authToken,
   });
 }
 
-export function getAuthStatus(authToken?: string | null): Promise<AuthStatus> {
-  return request<AuthStatus>("/api/auth/status", { authToken });
+export function getAuthStatus(): Promise<AuthStatus> {
+  return request<AuthStatus>("/api/auth/status");
 }
 
 export function registerAdmin(payload: AuthPayload): Promise<AuthResponse> {
@@ -125,23 +136,54 @@ export function loginAdmin(payload: AuthPayload): Promise<AuthResponse> {
   });
 }
 
-export function getSettings(authToken: string): Promise<SettingsPayload> {
-  return request<SettingsPayload>("/api/settings", { authToken });
-}
-
-export function updateSettings(
-  payload: SettingsPayload,
-  authToken: string
-): Promise<SettingsPayload & { updated_at: string }> {
-  return request<SettingsPayload & { updated_at: string }>("/api/settings", {
-    method: "PUT",
-    body: JSON.stringify(payload),
-    authToken,
+export function logoutAdmin(): Promise<{ status: string }> {
+  return request<{ status: string }>("/api/auth/logout", {
+    method: "POST",
   });
 }
 
-export function getAuditLogs(authToken: string, limit = 80): Promise<AuditLogEntry[]> {
-  return request<AuditLogEntry[]>(`/api/audit-logs?limit=${limit}`, { authToken });
+export function requestPasswordReset(
+  payload: PasswordResetRequestPayload
+): Promise<PasswordResetRequestResponse> {
+  return request<PasswordResetRequestResponse>("/api/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function confirmPasswordReset(payload: PasswordResetConfirmPayload): Promise<{ status: string }> {
+  return request<{ status: string }>("/api/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function revokeAllSessions(): Promise<SessionRevokeResponse> {
+  return request<SessionRevokeResponse>("/api/security/revoke-sessions", {
+    method: "POST",
+  });
+}
+
+export function getWebhookDeliveryLogs(
+  status: "all" | "success" | "failed",
+  limit = 80
+): Promise<WebhookDeliveryLogResponse> {
+  return request<WebhookDeliveryLogResponse>(`/api/webhook-delivery-logs?status=${status}&limit=${limit}`);
+}
+
+export function getSettings(): Promise<SettingsPayload> {
+  return request<SettingsPayload>("/api/settings");
+}
+
+export function updateSettings(payload: SettingsPayload): Promise<SettingsPayload & { updated_at: string }> {
+  return request<SettingsPayload & { updated_at: string }>("/api/settings", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getAuditLogs(limit = 80): Promise<AuditLogEntry[]> {
+  return request<AuditLogEntry[]>(`/api/audit-logs?limit=${limit}`);
 }
 
 export function getTrendSnapshots(days = 30): Promise<TrendSnapshot[]> {
@@ -152,9 +194,8 @@ export function getAlerts(limit = 20): Promise<AlertEvent[]> {
   return request<AlertEvent[]>(`/api/alerts?limit=${limit}`);
 }
 
-export function acknowledgeAlert(alertId: number, authToken: string): Promise<{ status: string }> {
+export function acknowledgeAlert(alertId: number): Promise<{ status: string }> {
   return request<{ status: string }>(`/api/alerts/${alertId}/acknowledge`, {
     method: "POST",
-    authToken,
   });
 }

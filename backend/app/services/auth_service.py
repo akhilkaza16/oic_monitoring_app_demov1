@@ -25,11 +25,12 @@ def verify_password(password: str, expected_hash: str, salt_hex: str) -> bool:
     return hmac.compare_digest(computed_hash, expected_hash)
 
 
-def create_token(email: str) -> str:
+def create_token(email: str, session_id: str) -> str:
     secret = os.environ["ADMIN_AUTH_SECRET"].encode()
     ttl_seconds = int(os.environ["ADMIN_TOKEN_TTL_SECONDS"])
     payload = {
         "sub": email,
+        "sid": session_id,
         "exp": int(time.time()) + ttl_seconds,
     }
     payload_raw = json.dumps(payload, separators=(",", ":")).encode()
@@ -38,7 +39,7 @@ def create_token(email: str) -> str:
     return f"{payload_encoded}.{signature}"
 
 
-def validate_token(token: str) -> str:
+def validate_token_data(token: str) -> dict:
     if "." not in token:
         raise ValueError("Malformed token")
 
@@ -55,4 +56,9 @@ def validate_token(token: str) -> str:
     if int(payload["exp"]) < int(time.time()):
         raise ValueError("Token expired")
 
+    return payload
+
+
+def validate_token(token: str) -> str:
+    payload = validate_token_data(token)
     return str(payload["sub"])

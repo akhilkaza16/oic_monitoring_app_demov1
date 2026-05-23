@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from app.repository import OICRepository
+from app.repositories.collector_repository import CollectorRepository
 
 
 class OICCollectorInterface(ABC):
@@ -12,7 +12,7 @@ class OICCollectorInterface(ABC):
 
 
 class MockOICCollector(OICCollectorInterface):
-    def __init__(self, repository: OICRepository) -> None:
+    def __init__(self, repository: CollectorRepository) -> None:
         self.repository = repository
 
     def collect_cycle(self) -> int:

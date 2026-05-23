@@ -19,6 +19,16 @@ User-selected scope:
 - Middleware logs API latency for monitored endpoints into SQLite for UI + benchmark visibility.
 - Settings security uses local admin auth with signed Bearer token, first-run admin bootstrap, and protected settings/audit endpoints.
 - Alerting now reads configurable warning/critical thresholds from Settings and applies them to both alert generation and alert feed visibility.
+- Auth migrated to cookie-first session model with httpOnly session cookie + CSRF double-submit header checks.
+- Repository split initiated: auth and settings/audit persistence moved into dedicated repositories.
+- Security domain expanded with password reset and session lifecycle controls.
+- Repository domain split expanded to dedicated alerts/integrations/trends/latency/collector repository layers.
+- Legacy `repository.py` converted into a lightweight compatibility shim delegating to domain repositories.
+- Webhook notification adapter added with configurable URL/token, warning+critical alert triggers, and retry/backoff delivery behavior.
+- Webhook monitoring added via dedicated Notifications page (summary counters, status filters, delivery table, 30s auto-refresh).
+- Retry policy controls added to Settings (max retries, initial backoff, timeout) with conservative guardrails.
+- Round-2 code quality hardening completed: active repositories now use `secrets.SystemRandom`, collector cycle logic split into focused helpers, and large settings UI sections extracted into dedicated components.
+- Legacy `_legacy_monolith_repository.py` retained and frozen (no active development path).
 
 ## What Has Been Implemented
 - Seed generation and load of 170 integrations across projects/domains with simulated health states.
@@ -34,16 +44,26 @@ User-selected scope:
 - Configurable threshold controls in Settings for issue score, missed schedules, and critical integration count (warning + critical levels).
 - Threshold-aware backend alert behavior: collector-generated alerts and dashboard feed filtering both respect saved thresholds.
 - Code-quality hardening pass applied: auth register flow variable safety fix, React hook dependency corrections, and test credential env-var migration.
-- Frontend token storage shifted from `localStorage` to `sessionStorage` as an interim security improvement.
+- Frontend token storage removed from app flow; cookie session now primary. Bearer path retained for automated test compatibility.
+- Added auth hardening: password complexity enforcement and temporary lockout after repeated failed login attempts.
+- Added CSRF protection on state-changing endpoints (settings updates, alert acknowledgement, manual collector trigger).
+- Added password reset flow with one-time on-screen reset code and 60-minute expiry.
+- Added server-side session revocation: auto-revoke previous sessions on new login + manual revoke-all endpoint.
+- Added dedicated Security page for reset-code request/confirm and revoke-all sessions control.
+- Completed deconstruction of monolith repository runtime path by routing backend logic through domain repositories.
+- Added webhook adapter configuration in Settings (enable toggle, URL, bearer token) and minimal alert payload delivery contract.
+- Added webhook delivery logs API and UI monitoring surface for operational visibility.
 - API latency logs endpoint + visual latency panels on dashboard/detail.
 - Manual mock collector trigger endpoint and standalone worker script (`backend/mock_collector.py`).
 - Benchmark script (`scripts/benchmark.py`) covering summary/list/detail plus backend latency log output.
 - Documentation updated: README + architecture notes (`docs/ARCHITECTURE.md`).
+- 2026-05-23: Applied second code-review remediation pass (P0/P1): removed hardcoded password in reset test flow, corrected literal identity assertions (`is`→boolean/equality-safe assertions), refactored `collector_repository.collect_mock_cycle`, modularized `SettingsPage` into auth/threshold/audit components, and tightened React hook dependency arrays across flagged pages.
+- 2026-05-23: Full backend + frontend regression completed via testing agent (`/app/test_reports/iteration_9.json`) with 100% pass status and no open issues.
 
 ## Prioritized Backlog
 ### P0 (Must Have Next)
 1. Rotate admin token secret for production-like local environments and add token revocation/expiry refresh controls.
-2. Move from bearer token in JS runtime to httpOnly cookie session auth.
+2. Add per-session management API (list active sessions, revoke individual session IDs).
 3. Add CI workflow for pytest + frontend build + lint checks on every change.
 
 ### P1 (Should Have)
@@ -57,6 +77,7 @@ User-selected scope:
 3. Add side-by-side comparison of current vs previous collector cycle deltas.
 
 ## Next Tasks
-1. Add optional webhook adapter (while keeping current email-log mode for local operation).
-2. Add alert mute windows/quiet hours and per-rule enable/disable toggles.
-3. Add security hardening for auth (password reset flow + stronger password policy enforcement).
+1. Add stronger account recovery safeguards (reset attempt throttling + verification challenge).
+2. Add session visibility API (list active sessions with issued/expiry metadata).
+3. Add notification history retention policies (pruning + archival controls).
+4. Optional future enhancement: per-webhook health scoring and consecutive failure alert badges on Notifications page.

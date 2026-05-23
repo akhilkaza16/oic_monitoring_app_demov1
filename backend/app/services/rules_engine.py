@@ -3,71 +3,58 @@ from __future__ import annotations
 from app.models import Recommendation
 
 
-def build_recommendations(
-    *,
-    status: str,
-    failed_instances: int,
-    connection_errors: int,
-    timeouts: int,
-    aborted_runs: int,
-    scheduled_runs_missed: int,
-) -> list[Recommendation]:
+RECOMMENDATION_RULES: tuple[tuple[str, int, int, str, str, str], ...] = (
+    (
+        "connection_errors",
+        100,
+        7,
+        "Stabilize upstream/downstream connections",
+        "Connection error spikes often indicate expired credentials, DNS drift, or endpoint throttling.",
+        "Validate credentials and certificates, then run a connection smoke test every 5 minutes.",
+    ),
+    (
+        "timeouts",
+        90,
+        6,
+        "Reduce timeout pressure",
+        "Repeated timeouts suggest long-running payload transformation or overloaded target APIs.",
+        "Increase async chunking and tune retry backoff; add payload size guardrails.",
+    ),
+    (
+        "failed_instances",
+        80,
+        5,
+        "Prioritize failed-instance replay",
+        "Higher failed-instance count directly degrades business process completion.",
+        "Replay failed instances in batches and isolate recurring payload signatures.",
+    ),
+    (
+        "aborted_runs",
+        70,
+        4,
+        "Investigate runtime aborts",
+        "Aborts usually occur when dependency services return invalid responses or workflows terminate early.",
+        "Enable step-level tracing and add defensive checks before terminal actions.",
+    ),
+    (
+        "scheduled_runs_missed",
+        60,
+        8,
+        "Repair scheduler reliability",
+        "Missed schedule windows can create downstream data gaps and reporting delays.",
+        "Audit scheduler timezone/clock drift and set synthetic heartbeat alerts.",
+    ),
+)
+
+
+def _build_candidates(*, status: str, metrics: dict[str, int]) -> list[tuple[int, str, str, str]]:
     candidates: list[tuple[int, str, str, str]] = []
-
-    if connection_errors > 0:
-        score = 100 + connection_errors * 7
-        candidates.append(
-            (
-                score,
-                "Stabilize upstream/downstream connections",
-                "Connection error spikes often indicate expired credentials, DNS drift, or endpoint throttling.",
-                "Validate credentials and certificates, then run a connection smoke test every 5 minutes.",
-            )
-        )
-
-    if timeouts > 0:
-        score = 90 + timeouts * 6
-        candidates.append(
-            (
-                score,
-                "Reduce timeout pressure",
-                "Repeated timeouts suggest long-running payload transformation or overloaded target APIs.",
-                "Increase async chunking and tune retry backoff; add payload size guardrails.",
-            )
-        )
-
-    if failed_instances > 0:
-        score = 80 + failed_instances * 5
-        candidates.append(
-            (
-                score,
-                "Prioritize failed-instance replay",
-                "Higher failed-instance count directly degrades business process completion.",
-                "Replay failed instances in batches and isolate recurring payload signatures.",
-            )
-        )
-
-    if aborted_runs > 0:
-        score = 70 + aborted_runs * 4
-        candidates.append(
-            (
-                score,
-                "Investigate runtime aborts",
-                "Aborts usually occur when dependency services return invalid responses or workflows terminate early.",
-                "Enable step-level tracing and add defensive checks before terminal actions.",
-            )
-        )
-
-    if scheduled_runs_missed > 0:
-        score = 60 + scheduled_runs_missed * 8
-        candidates.append(
-            (
-                score,
-                "Repair scheduler reliability",
-                "Missed schedule windows can create downstream data gaps and reporting delays.",
-                "Audit scheduler timezone/clock drift and set synthetic heartbeat alerts.",
-            )
-        )
+    for metric_name, base_score, multiplier, title, rationale, action in RECOMMENDATION_RULES:
+        metric_value = metrics[metric_name]
+        if metric_value <= 0:
+            continue
+        score = base_score + metric_value * multiplier
+        candidates.append((score, title, rationale, action))
 
     if not candidates and status == "healthy":
         candidates.append(
@@ -80,6 +67,28 @@ def build_recommendations(
         )
 
     candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates
+
+
+def build_recommendations(
+    *,
+    status: str,
+    failed_instances: int,
+    connection_errors: int,
+    timeouts: int,
+    aborted_runs: int,
+    scheduled_runs_missed: int,
+) -> list[Recommendation]:
+    candidates = _build_candidates(
+        status=status,
+        metrics={
+            "failed_instances": failed_instances,
+            "connection_errors": connection_errors,
+            "timeouts": timeouts,
+            "aborted_runs": aborted_runs,
+            "scheduled_runs_missed": scheduled_runs_missed,
+        },
+    )
 
     recommendations: list[Recommendation] = []
     for index, (_, title, rationale, action) in enumerate(candidates[:3], start=1):

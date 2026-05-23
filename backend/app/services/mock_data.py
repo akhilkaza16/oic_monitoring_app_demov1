@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import random
+from secrets import SystemRandom
 from datetime import datetime, timedelta, timezone
 
 PROJECTS = [
@@ -55,14 +55,14 @@ STATUS_WEIGHTS = {
 }
 
 
-def _weighted_status(rng: random.Random) -> str:
+def _weighted_status(rng: SystemRandom) -> str:
     statuses = list(STATUS_WEIGHTS.keys())
     weights = list(STATUS_WEIGHTS.values())
     return rng.choices(statuses, weights=weights, k=1)[0]
 
 
 def build_seed_dataset(total: int = 170) -> tuple[list[dict], list[dict], dict[str, str]]:
-    rng = random.Random(170)
+    rng = SystemRandom()
     now = datetime.now(timezone.utc)
     integrations: list[dict] = []
     run_events: list[dict] = []
@@ -147,6 +147,12 @@ def build_seed_dataset(total: int = 170) -> tuple[list[dict], list[dict], dict[s
         "threshold_missed_schedules_critical": "5",
         "threshold_critical_integrations_warning": "20",
         "threshold_critical_integrations_critical": "35",
+        "webhook_enabled": "false",
+        "webhook_url": "",
+        "webhook_bearer_token": "",
+        "webhook_max_retries": "3",
+        "webhook_initial_backoff_seconds": "0.5",
+        "webhook_timeout_seconds": "3",
     }
 
     return integrations, run_events, settings

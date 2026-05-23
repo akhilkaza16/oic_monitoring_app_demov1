@@ -1,10 +1,12 @@
-import { ChartBar, Gear, House, ListDashes } from "@phosphor-icons/react";
+import { BellRinging, ChartBar, Gear, House, ListDashes, ShieldCheck } from "@phosphor-icons/react";
 import { NavLink } from "react-router-dom";
 
 const navItems = [
   { to: "/", label: "Executive Overview", icon: House, testId: "nav-executive-overview-link" },
   { to: "/integrations", label: "Integrations", icon: ListDashes, testId: "nav-integrations-link" },
   { to: "/settings", label: "Settings", icon: Gear, testId: "nav-settings-link" },
+  { to: "/security", label: "Security", icon: ShieldCheck, testId: "nav-security-link" },
+  { to: "/notifications", label: "Notifications", icon: BellRinging, testId: "nav-notifications-link" },
 ];
 
 export const NavBar = () => {

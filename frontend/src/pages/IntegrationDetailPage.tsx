@@ -26,7 +26,7 @@ export default function IntegrationDetailPage() {
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to load integration detail");
     }
-  }, [getIntegrationDetail, getLatencyLogs, integrationId]);
+  }, [integrationId]);
 
   useEffect(() => {
     load();
@@ -39,6 +39,8 @@ export default function IntegrationDetailPage() {
     try {
       await runMockCollectorCycle();
       await load();
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Could not run collector cycle");
     } finally {
       setRunningCollector(false);
     }

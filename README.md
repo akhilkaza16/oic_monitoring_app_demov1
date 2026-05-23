@@ -23,6 +23,10 @@ Local proof-of-concept dashboard for monitoring **170 mock Oracle Integration Cl
 10. Settings authentication with first-run local admin creation + audit logs (settings updates, login attempts, manual collector triggers)
 11. Benchmark script for key read endpoints with latency report output
 12. Settings page for future OIC connector configuration (kept abstract)
+13. Dedicated Security page with one-time password reset codes and server-side session revocation controls
+14. Webhook notification adapter (warning/critical alert events) with retry and bearer-token auth
+15. Notifications page for webhook delivery monitoring (summary, status filters, delivery logs, auto-refresh)
+16. Configurable webhook retry policy controls in Settings (max retries, initial backoff, timeout)
 
 ## Project Structure
 
@@ -90,6 +94,13 @@ curl -s http://localhost:8001/api/auth/status
 1. Open the **Settings** page in the frontend.
 2. If no admin exists, create the first local admin account.
 3. Use those credentials for future login to protected settings and audit logs.
+4. Auth now uses httpOnly session cookies + CSRF header protection for state-changing requests.
+
+## Running Authenticated Backend Tests
+
+```bash
+TEST_ADMIN_EMAIL=admin@badger.local TEST_ADMIN_PASSWORD='YourStrongPassword!' pytest /app/backend/tests -q
+```
 
 ## Run Benchmark
 

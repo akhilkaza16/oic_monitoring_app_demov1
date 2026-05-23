@@ -112,6 +112,12 @@ def test_settings_get_returns_all_threshold_fields(api_client: requests.Session,
         "threshold_missed_schedules_critical",
         "threshold_critical_integrations_warning",
         "threshold_critical_integrations_critical",
+        "webhook_enabled",
+        "webhook_url",
+        "webhook_bearer_token",
+        "webhook_max_retries",
+        "webhook_initial_backoff_seconds",
+        "webhook_timeout_seconds",
     }
     assert expected_keys.issubset(set(data.keys()))
     assert isinstance(data["threshold_issue_score_warning"], int)

@@ -5,7 +5,6 @@ import {
   getAlerts,
   getExecutiveSummary,
   getLatencyLogs,
-  getStoredAdminToken,
   getTrendSnapshots,
   runMockCollectorCycle,
 } from "../api";
@@ -50,7 +49,7 @@ export default function ExecutiveDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [getAlerts, getExecutiveSummary, getLatencyLogs, getTrendSnapshots]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -61,25 +60,26 @@ export default function ExecutiveDashboardPage() {
   const triggerCollector = async () => {
     setIsRefreshing(true);
     try {
-      await runMockCollectorCycle(getStoredAdminToken());
+      await runMockCollectorCycle();
       await load();
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : "Could not trigger collector");
     } finally {
       setIsRefreshing(false);
     }
   };
 
   const onAcknowledgeAlert = async (alertId: number) => {
-    const token = getStoredAdminToken();
-    if (!token) {
-      setError("Login from Settings page to acknowledge alerts.");
-      return;
-    }
     setIsAcknowledging(alertId);
     try {
-      await acknowledgeAlert(alertId, token);
+      await acknowledgeAlert(alertId);
       await load();
     } catch (ackError) {
-      setError(ackError instanceof Error ? ackError.message : "Could not acknowledge alert");
+      setError(
+        ackError instanceof Error
+          ? ackError.message
+          : "Could not acknowledge alert. Sign in from Settings if needed."
+      );
     } finally {
       setIsAcknowledging(null);
     }

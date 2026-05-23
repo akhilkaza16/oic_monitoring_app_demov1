@@ -84,6 +84,12 @@ class SettingsPayload(BaseModel):
     threshold_missed_schedules_critical: int = Field(..., ge=1, le=60)
     threshold_critical_integrations_warning: int = Field(..., ge=1, le=170)
     threshold_critical_integrations_critical: int = Field(..., ge=1, le=170)
+    webhook_enabled: bool
+    webhook_url: str
+    webhook_bearer_token: str
+    webhook_max_retries: int = Field(..., ge=1, le=3)
+    webhook_initial_backoff_seconds: float = Field(..., ge=0.5, le=2.0)
+    webhook_timeout_seconds: int = Field(..., ge=2, le=6)
 
 
 class AuthPayload(BaseModel):
@@ -99,6 +105,22 @@ class AuthStatusResponse(BaseModel):
 class AuthResponse(BaseModel):
     token: str
     email: str
+
+
+class PasswordResetRequestPayload(BaseModel):
+    email: str
+
+
+class PasswordResetRequestResponse(BaseModel):
+    status: str
+    reset_code: str
+    expires_in_minutes: int
+
+
+class PasswordResetConfirmPayload(BaseModel):
+    email: str
+    reset_code: str
+    new_password: str = Field(..., min_length=10, max_length=128)
 
 
 class AuditLogEntry(BaseModel):

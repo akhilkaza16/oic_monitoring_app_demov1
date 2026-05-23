@@ -1,16 +1,17 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
-  clearStoredAdminToken,
   getAuditLogs,
   getAuthStatus,
   getSettings,
-  getStoredAdminToken,
   loginAdmin,
+  logoutAdmin,
   registerAdmin,
-  setStoredAdminToken,
   updateSettings,
 } from "../api";
 import { AuditLogEntry, SettingsPayload } from "../types";
+import { SettingsAuditLogsTable } from "../components/settings/SettingsAuditLogsTable";
+import { AdminLoginPanel, FirstAdminSetupPanel } from "../components/settings/SettingsAuthPanel";
+import { SettingsThresholdSections } from "../components/settings/SettingsThresholdSections";
 
 const DEFAULT_FORM: SettingsPayload = {
   oic_base_url: "",
@@ -23,10 +24,15 @@ const DEFAULT_FORM: SettingsPayload = {
   threshold_missed_schedules_critical: 5,
   threshold_critical_integrations_warning: 20,
   threshold_critical_integrations_critical: 35,
+  webhook_enabled: false,
+  webhook_url: "",
+  webhook_bearer_token: "",
+  webhook_max_retries: 3,
+  webhook_initial_backoff_seconds: 0.5,
+  webhook_timeout_seconds: 3,
 };
 
 export default function SettingsPage() {
-  const [authToken, setAuthToken] = useState<string | null>(getStoredAdminToken());
   const [hasAdmin, setHasAdmin] = useState(false);
   const [authenticatedEmail, setAuthenticatedEmail] = useState<string | null>(null);
   const [registerEmail, setRegisterEmail] = useState("");
@@ -38,11 +44,12 @@ export default function SettingsPage() {
   const [status, setStatus] = useState<string>("Awaiting action");
   const [isSaving, setIsSaving] = useState(false);
   const [loadingAuthState, setLoadingAuthState] = useState(true);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
 
   const loadAuthStatus = useCallback(
-    async (tokenValue?: string | null) => {
+    async () => {
       try {
-        const response = await getAuthStatus(tokenValue ?? authToken);
+        const response = await getAuthStatus();
         setHasAdmin(response.has_admin);
         setAuthenticatedEmail(response.authenticated_email);
 
@@ -52,29 +59,27 @@ export default function SettingsPage() {
           setStatus("Please sign in to access settings");
         }
 
-        if (!response.authenticated_email && (tokenValue ?? authToken)) {
-          clearStoredAdminToken();
-          setAuthToken(null);
-        }
       } catch {
         setStatus("Could not check auth status");
       } finally {
         setLoadingAuthState(false);
       }
     },
-    [authToken]
+    []
   );
 
   useEffect(() => {
-    loadAuthStatus(authToken);
-  }, [authToken, loadAuthStatus]);
+    loadAuthStatus();
+  }, [loadAuthStatus]);
 
   useEffect(() => {
-    if (!authToken || !authenticatedEmail) {
+    if (!authenticatedEmail) {
       return;
     }
 
-    Promise.all([getSettings(authToken), getAuditLogs(authToken, 80)])
+    setIsLoadingSettings(true);
+
+    Promise.all([getSettings(), getAuditLogs(80)])
       .then(([settingsPayload, logsPayload]) => {
         setForm(settingsPayload);
         setAuditLogs(logsPayload);
@@ -82,17 +87,18 @@ export default function SettingsPage() {
       })
       .catch((error) => {
         setStatus(error instanceof Error ? error.message : "Could not load secure settings data");
+      })
+      .finally(() => {
+        setIsLoadingSettings(false);
       });
-  }, [authToken, authenticatedEmail, getAuditLogs, getSettings]);
+  }, [authenticatedEmail]);
 
   const onRegisterAdmin = async (event: FormEvent) => {
     event.preventDefault();
     setStatus("Creating first admin...");
     try {
-      const response = await registerAdmin({ email: registerEmail, password: registerPassword });
-      setStoredAdminToken(response.token);
-      setAuthToken(response.token);
-      await loadAuthStatus(response.token);
+      await registerAdmin({ email: registerEmail, password: registerPassword });
+      await loadAuthStatus();
       setStatus("First admin created and signed in");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not create admin");
@@ -103,10 +109,8 @@ export default function SettingsPage() {
     event.preventDefault();
     setStatus("Signing in...");
     try {
-      const response = await loginAdmin({ email: loginEmail, password: loginPassword });
-      setStoredAdminToken(response.token);
-      setAuthToken(response.token);
-      await loadAuthStatus(response.token);
+      await loginAdmin({ email: loginEmail, password: loginPassword });
+      await loadAuthStatus();
       setStatus("Signed in successfully");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not login");
@@ -114,18 +118,21 @@ export default function SettingsPage() {
   };
 
   const onLogout = async () => {
-    clearStoredAdminToken();
-    setAuthToken(null);
+    await logoutAdmin();
     setAuthenticatedEmail(null);
     setAuditLogs([]);
     setStatus("Signed out. Please sign in to continue");
-    await loadAuthStatus(null);
+    await loadAuthStatus();
   };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!authToken) {
+    if (!authenticatedEmail) {
       setStatus("Sign in required");
+      return;
+    }
+    if (isLoadingSettings) {
+      setStatus("Please wait for settings to finish loading before saving");
       return;
     }
     if (form.threshold_issue_score_warning > form.threshold_issue_score_critical) {
@@ -140,10 +147,26 @@ export default function SettingsPage() {
       setStatus("Critical integration count warning must be less than or equal to critical threshold");
       return;
     }
+    if (form.webhook_enabled && (!form.webhook_url.trim() || !form.webhook_bearer_token.trim())) {
+      setStatus("Webhook URL and webhook bearer token are required when webhook is enabled");
+      return;
+    }
+    if (form.webhook_max_retries < 1 || form.webhook_max_retries > 3) {
+      setStatus("Webhook max retries must be between 1 and 3");
+      return;
+    }
+    if (form.webhook_initial_backoff_seconds < 0.5 || form.webhook_initial_backoff_seconds > 2) {
+      setStatus("Webhook initial backoff must be between 0.5 and 2.0 seconds");
+      return;
+    }
+    if (form.webhook_timeout_seconds < 2 || form.webhook_timeout_seconds > 6) {
+      setStatus("Webhook timeout must be between 2 and 6 seconds");
+      return;
+    }
     setIsSaving(true);
     try {
-      await updateSettings(form, authToken);
-      const latestLogs = await getAuditLogs(authToken, 80);
+      await updateSettings(form);
+      const latestLogs = await getAuditLogs(80);
       setAuditLogs(latestLogs);
       setStatus("Settings saved successfully");
     } catch (error) {
@@ -175,38 +198,19 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <form className="card auth-card" onSubmit={onRegisterAdmin} data-testid="settings-register-form">
-          <label className="field">
-            <span data-testid="settings-register-email-label">Admin Email</span>
-            <input
-              type="email"
-              value={registerEmail}
-              onChange={(event) => setRegisterEmail(event.target.value)}
-              data-testid="settings-register-email-input"
-            />
-          </label>
-          <label className="field">
-            <span data-testid="settings-register-password-label">Password</span>
-            <input
-              type="password"
-              value={registerPassword}
-              onChange={(event) => setRegisterPassword(event.target.value)}
-              minLength={8}
-              data-testid="settings-register-password-input"
-            />
-          </label>
-          <button type="submit" className="button-primary" data-testid="settings-register-submit-button">
-            Create Admin
-          </button>
-          <p className="muted" data-testid="settings-register-status-message">
-            {status}
-          </p>
-        </form>
+        <FirstAdminSetupPanel
+          registerEmail={registerEmail}
+          registerPassword={registerPassword}
+          status={status}
+          onRegisterEmailChange={setRegisterEmail}
+          onRegisterPasswordChange={setRegisterPassword}
+          onSubmit={onRegisterAdmin}
+        />
       </section>
     );
   }
 
-  if (!authenticatedEmail || !authToken) {
+  if (!authenticatedEmail) {
     return (
       <section className="page" data-testid="settings-login-page">
         <div className="page-header">
@@ -220,33 +224,14 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <form className="card auth-card" onSubmit={onLoginAdmin} data-testid="settings-login-form">
-          <label className="field">
-            <span data-testid="settings-login-email-label">Email</span>
-            <input
-              type="email"
-              value={loginEmail}
-              onChange={(event) => setLoginEmail(event.target.value)}
-              data-testid="settings-login-email-input"
-            />
-          </label>
-          <label className="field">
-            <span data-testid="settings-login-password-label">Password</span>
-            <input
-              type="password"
-              value={loginPassword}
-              onChange={(event) => setLoginPassword(event.target.value)}
-              minLength={8}
-              data-testid="settings-login-password-input"
-            />
-          </label>
-          <button type="submit" className="button-primary" data-testid="settings-login-submit-button">
-            Sign In
-          </button>
-          <p className="muted" data-testid="settings-login-status-message">
-            {status}
-          </p>
-        </form>
+        <AdminLoginPanel
+          loginEmail={loginEmail}
+          loginPassword={loginPassword}
+          status={status}
+          onLoginEmailChange={setLoginEmail}
+          onLoginPasswordChange={setLoginPassword}
+          onSubmit={onLoginAdmin}
+        />
       </section>
     );
   }
@@ -317,123 +302,13 @@ export default function SettingsPage() {
           />
         </label>
 
-        <section className="threshold-grid" data-testid="settings-threshold-grid">
-          <h3 className="section-heading" data-testid="settings-threshold-heading">
-            Alert Threshold Configuration (Warning / Critical)
-          </h3>
-
-          <label className="field">
-            <span data-testid="threshold-issue-warning-label">Issue Score Warning</span>
-            <input
-              type="number"
-              min={1}
-              max={200}
-              value={form.threshold_issue_score_warning}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  threshold_issue_score_warning: Number(event.target.value),
-                }))
-              }
-              data-testid="threshold-issue-warning-input"
-            />
-          </label>
-
-          <label className="field">
-            <span data-testid="threshold-issue-critical-label">Issue Score Critical</span>
-            <input
-              type="number"
-              min={1}
-              max={250}
-              value={form.threshold_issue_score_critical}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  threshold_issue_score_critical: Number(event.target.value),
-                }))
-              }
-              data-testid="threshold-issue-critical-input"
-            />
-          </label>
-
-          <label className="field">
-            <span data-testid="threshold-missed-warning-label">Missed Schedules Warning</span>
-            <input
-              type="number"
-              min={1}
-              max={30}
-              value={form.threshold_missed_schedules_warning}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  threshold_missed_schedules_warning: Number(event.target.value),
-                }))
-              }
-              data-testid="threshold-missed-warning-input"
-            />
-          </label>
-
-          <label className="field">
-            <span data-testid="threshold-missed-critical-label">Missed Schedules Critical</span>
-            <input
-              type="number"
-              min={1}
-              max={60}
-              value={form.threshold_missed_schedules_critical}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  threshold_missed_schedules_critical: Number(event.target.value),
-                }))
-              }
-              data-testid="threshold-missed-critical-input"
-            />
-          </label>
-
-          <label className="field">
-            <span data-testid="threshold-critical-count-warning-label">
-              Critical Integration Count Warning
-            </span>
-            <input
-              type="number"
-              min={1}
-              max={170}
-              value={form.threshold_critical_integrations_warning}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  threshold_critical_integrations_warning: Number(event.target.value),
-                }))
-              }
-              data-testid="threshold-critical-count-warning-input"
-            />
-          </label>
-
-          <label className="field">
-            <span data-testid="threshold-critical-count-critical-label">
-              Critical Integration Count Critical
-            </span>
-            <input
-              type="number"
-              min={1}
-              max={170}
-              value={form.threshold_critical_integrations_critical}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  threshold_critical_integrations_critical: Number(event.target.value),
-                }))
-              }
-              data-testid="threshold-critical-count-critical-input"
-            />
-          </label>
-        </section>
+        <SettingsThresholdSections form={form} setForm={setForm} />
 
         <div className="actions-inline">
           <button
             type="submit"
             className="button-primary"
-            disabled={isSaving}
+            disabled={isSaving || isLoadingSettings}
             data-testid="settings-save-button"
           >
             {isSaving ? "Saving" : "Save Settings"}
@@ -444,37 +319,7 @@ export default function SettingsPage() {
         </div>
       </form>
 
-      <section className="card" data-testid="settings-audit-log-panel">
-        <h3 className="section-heading" data-testid="settings-audit-log-heading">
-          Audit Logs
-        </h3>
-        <div className="table-wrap">
-          <table className="data-table" data-testid="settings-audit-log-table">
-            <thead>
-              <tr>
-                <th data-testid="audit-th-time">Time</th>
-                <th data-testid="audit-th-actor">Actor</th>
-                <th data-testid="audit-th-action">Action</th>
-                <th data-testid="audit-th-target">Target</th>
-                <th data-testid="audit-th-details">Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auditLogs.map((entry) => (
-                <tr key={entry.id} data-testid={`audit-row-${entry.id}`}>
-                  <td data-testid={`audit-time-${entry.id}`}>
-                    {new Date(entry.created_at).toLocaleString()}
-                  </td>
-                  <td data-testid={`audit-actor-${entry.id}`}>{entry.actor_email ?? "system"}</td>
-                  <td data-testid={`audit-action-${entry.id}`}>{entry.action_type}</td>
-                  <td data-testid={`audit-target-${entry.id}`}>{entry.target}</td>
-                  <td data-testid={`audit-details-${entry.id}`}>{entry.details}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <SettingsAuditLogsTable auditLogs={auditLogs} />
     </section>
   );
 }
