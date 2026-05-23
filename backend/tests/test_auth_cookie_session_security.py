@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 import requests
@@ -185,7 +186,7 @@ def test_logout_clears_cookie_session(api_client: requests.Session, admin_creden
 
 def test_lockout_after_repeated_failed_attempts(api_client: requests.Session) -> None:
     # Feature: login lockout after repeated failed attempts
-    lockout_email = "lockout-test@badger.local"
+    lockout_email = f"lockout-{uuid4().hex[:8]}@badger.local"
 
     statuses: list[int] = []
     for _ in range(5):

@@ -32,18 +32,16 @@ from app.repositories.integrations_repository import IntegrationsRepository
 from app.repositories.latency_repository import LatencyRepository
 from app.repositories.settings_repository import SettingsRepository
 from app.repositories.trends_repository import TrendsRepository
-from app.repository import OICRepository
 from app.services.auth_service import create_token, validate_token_data
 from app.services.rules_engine import build_recommendations
 
-repository = OICRepository()
 auth_repository = AuthRepository()
 settings_repository = SettingsRepository()
-integrations_repository = IntegrationsRepository(repository)
-alerts_repository = AlertsRepository(repository)
-trends_repository = TrendsRepository(repository)
-latency_repository = LatencyRepository(repository)
-collector_repository = CollectorRepository(repository)
+integrations_repository = IntegrationsRepository()
+alerts_repository = AlertsRepository()
+trends_repository = TrendsRepository()
+latency_repository = LatencyRepository()
+collector_repository = CollectorRepository()
 
 SESSION_COOKIE_NAME = "session_token"
 CSRF_COOKIE_NAME = "csrf_token"
