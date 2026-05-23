@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   clearStoredAdminToken,
   getAuditLogs,
@@ -39,33 +39,35 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [loadingAuthState, setLoadingAuthState] = useState(true);
 
-  const loadAuthStatus = async (tokenValue?: string | null) => {
-    try {
-      const response = await getAuthStatus(tokenValue ?? authToken);
-      setHasAdmin(response.has_admin);
-      setAuthenticatedEmail(response.authenticated_email);
+  const loadAuthStatus = useCallback(
+    async (tokenValue?: string | null) => {
+      try {
+        const response = await getAuthStatus(tokenValue ?? authToken);
+        setHasAdmin(response.has_admin);
+        setAuthenticatedEmail(response.authenticated_email);
 
-      if (!response.has_admin) {
-        setStatus("Create your first admin account to unlock settings");
-      } else if (!response.authenticated_email) {
-        setStatus("Please sign in to access settings");
-      }
+        if (!response.has_admin) {
+          setStatus("Create your first admin account to unlock settings");
+        } else if (!response.authenticated_email) {
+          setStatus("Please sign in to access settings");
+        }
 
-      if (!response.authenticated_email && (tokenValue ?? authToken)) {
-        clearStoredAdminToken();
-        setAuthToken(null);
+        if (!response.authenticated_email && (tokenValue ?? authToken)) {
+          clearStoredAdminToken();
+          setAuthToken(null);
+        }
+      } catch {
+        setStatus("Could not check auth status");
+      } finally {
+        setLoadingAuthState(false);
       }
-    } catch {
-      setStatus("Could not check auth status");
-    } finally {
-      setLoadingAuthState(false);
-    }
-  };
+    },
+    [authToken]
+  );
 
   useEffect(() => {
     loadAuthStatus(authToken);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authToken, loadAuthStatus]);
 
   useEffect(() => {
     if (!authToken || !authenticatedEmail) {
@@ -81,7 +83,7 @@ export default function SettingsPage() {
       .catch((error) => {
         setStatus(error instanceof Error ? error.message : "Could not load secure settings data");
       });
-  }, [authToken, authenticatedEmail]);
+  }, [authToken, authenticatedEmail, getAuditLogs, getSettings]);
 
   const onRegisterAdmin = async (event: FormEvent) => {
     event.preventDefault();

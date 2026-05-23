@@ -30,8 +30,14 @@ def _load_base_url() -> str:
 
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/") or _load_base_url()
-ADMIN_EMAIL = "admin@badger.local"
-ADMIN_PASSWORD = "BadgerPass123!"
+
+
+def _get_admin_credentials() -> tuple[str, str]:
+    email = os.environ.get("TEST_ADMIN_EMAIL", "").strip()
+    password = os.environ.get("TEST_ADMIN_PASSWORD", "").strip()
+    if not email or not password:
+        pytest.skip("Set TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD to run authenticated test coverage")
+    return email, password
 
 
 @pytest.fixture()
@@ -132,12 +138,14 @@ def test_latency_logs_capture_middleware_entries(api_client: requests.Session) -
 
 def test_settings_get_and_put_persist(api_client: requests.Session) -> None:
     # Feature: settings auth + load and save persistence
+    admin_email, admin_password = _get_admin_credentials()
+
     status_resp = api_client.get(f"{BASE_URL}/api/auth/status", timeout=20)
     assert status_resp.status_code == 200
     if not status_resp.json()["has_admin"]:
         register_resp = api_client.post(
             f"{BASE_URL}/api/auth/register-admin",
-            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+            json={"email": admin_email, "password": admin_password},
             timeout=20,
         )
         assert register_resp.status_code == 200
@@ -145,7 +153,7 @@ def test_settings_get_and_put_persist(api_client: requests.Session) -> None:
     else:
         login_resp = api_client.post(
             f"{BASE_URL}/api/auth/login",
-            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+            json={"email": admin_email, "password": admin_password},
             timeout=20,
         )
         if login_resp.status_code != 200:
@@ -163,6 +171,12 @@ def test_settings_get_and_put_persist(api_client: requests.Session) -> None:
         "auth_mode": "Basic",
         "polling_seconds": 45,
         "notification_email": "monitoring-team@example.com",
+        "threshold_issue_score_warning": before["threshold_issue_score_warning"],
+        "threshold_issue_score_critical": before["threshold_issue_score_critical"],
+        "threshold_missed_schedules_warning": before["threshold_missed_schedules_warning"],
+        "threshold_missed_schedules_critical": before["threshold_missed_schedules_critical"],
+        "threshold_critical_integrations_warning": before["threshold_critical_integrations_warning"],
+        "threshold_critical_integrations_critical": before["threshold_critical_integrations_critical"],
     }
     put_resp = api_client.put(f"{BASE_URL}/api/settings", json=update_payload, headers=headers, timeout=20)
     assert put_resp.status_code == 200

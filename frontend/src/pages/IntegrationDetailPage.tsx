@@ -26,7 +26,7 @@ export default function IntegrationDetailPage() {
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to load integration detail");
     }
-  }, [integrationId]);
+  }, [getIntegrationDetail, getLatencyLogs, integrationId]);
 
   useEffect(() => {
     load();

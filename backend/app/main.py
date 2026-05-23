@@ -106,9 +106,10 @@ def auth_status(authorization: str | None = Header(default=None)) -> AuthStatusR
 
 @app.post("/api/auth/register-admin", response_model=AuthResponse)
 def register_admin(payload: AuthPayload) -> AuthResponse:
+    email = payload.email.lower().strip()
     if repository.has_admin_user():
         repository.log_audit(
-            actor_email=payload.email.lower().strip(),
+            actor_email=email,
             action_type="admin_register_rejected",
             target="admin_users",
             details="Registration attempt rejected because admin already exists",
@@ -116,17 +117,17 @@ def register_admin(payload: AuthPayload) -> AuthResponse:
         raise HTTPException(status_code=409, detail="Admin is already configured")
 
     try:
-        email = repository.create_first_admin(email=payload.email, password=payload.password)
+        created_email = repository.create_first_admin(email=email, password=payload.password)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     repository.log_audit(
-        actor_email=email,
+        actor_email=created_email,
         action_type="admin_registered",
         target="admin_users",
         details="First admin account created from settings page",
     )
-    return AuthResponse(token=create_token(email), email=email)
+    return AuthResponse(token=create_token(created_email), email=created_email)
 
 
 @app.post("/api/auth/login", response_model=AuthResponse)

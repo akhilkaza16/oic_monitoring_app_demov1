@@ -33,6 +33,8 @@ User-selected scope:
 - In-app alert feed with simulated email log fields via `/api/alerts` and acknowledge action endpoint.
 - Configurable threshold controls in Settings for issue score, missed schedules, and critical integration count (warning + critical levels).
 - Threshold-aware backend alert behavior: collector-generated alerts and dashboard feed filtering both respect saved thresholds.
+- Code-quality hardening pass applied: auth register flow variable safety fix, React hook dependency corrections, and test credential env-var migration.
+- Frontend token storage shifted from `localStorage` to `sessionStorage` as an interim security improvement.
 - API latency logs endpoint + visual latency panels on dashboard/detail.
 - Manual mock collector trigger endpoint and standalone worker script (`backend/mock_collector.py`).
 - Benchmark script (`scripts/benchmark.py`) covering summary/list/detail plus backend latency log output.
@@ -41,7 +43,7 @@ User-selected scope:
 ## Prioritized Backlog
 ### P0 (Must Have Next)
 1. Rotate admin token secret for production-like local environments and add token revocation/expiry refresh controls.
-2. Add stricter validation for settings payloads (email domain allowlist, URL format policy, auth mode constraints).
+2. Move from bearer token in JS runtime to httpOnly cookie session auth.
 3. Add CI workflow for pytest + frontend build + lint checks on every change.
 
 ### P1 (Should Have)

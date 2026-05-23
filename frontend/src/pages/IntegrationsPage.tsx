@@ -34,13 +34,13 @@ export default function IntegrationsPage() {
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to load integrations");
     }
-  }, [status, project, businessDomain, search, offset]);
+  }, [PAGE_SIZE, businessDomain, getIntegrations, offset, project, search, status]);
 
   useEffect(() => {
     getFilterOptions()
       .then(setOptions)
       .catch(() => setOptions({ projects: [], business_domains: [] }));
-  }, []);
+  }, [getFilterOptions]);
 
   useEffect(() => {
     load();

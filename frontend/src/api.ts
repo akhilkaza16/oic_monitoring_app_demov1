@@ -22,15 +22,15 @@ if (!API_BASE) {
 const ADMIN_TOKEN_STORAGE_KEY = "badger-admin-token";
 
 export function getStoredAdminToken(): string | null {
-  return window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+  return window.sessionStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
 }
 
 export function setStoredAdminToken(token: string): void {
-  window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+  window.sessionStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
 }
 
 export function clearStoredAdminToken(): void {
-  window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+  window.sessionStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
 }
 
 interface RequestOptions extends RequestInit {

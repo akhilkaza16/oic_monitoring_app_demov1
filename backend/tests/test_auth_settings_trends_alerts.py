@@ -30,8 +30,14 @@ def _load_base_url() -> str:
 
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/") or _load_base_url()
-ADMIN_EMAIL = "admin@badger.local"
-ADMIN_PASSWORD = "BadgerPass123!"
+
+
+def _get_admin_credentials() -> tuple[str, str]:
+    email = os.environ.get("TEST_ADMIN_EMAIL", "").strip()
+    password = os.environ.get("TEST_ADMIN_PASSWORD", "").strip()
+    if not email or not password:
+        pytest.skip("Set TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD to run authenticated test coverage")
+    return email, password
 
 
 @pytest.fixture()
@@ -43,8 +49,15 @@ def api_client() -> requests.Session:
 
 
 @pytest.fixture()
-def admin_token(api_client: requests.Session) -> str:
+def admin_credentials() -> tuple[str, str]:
+    return _get_admin_credentials()
+
+
+@pytest.fixture()
+def admin_token(api_client: requests.Session, admin_credentials: tuple[str, str]) -> str:
     # Module: auth bootstrap/login helper for protected endpoints
+    admin_email, admin_password = admin_credentials
+
     status_response = api_client.get(f"{BASE_URL}/api/auth/status", timeout=20)
     assert status_response.status_code == 200
     status_data = status_response.json()
@@ -52,26 +65,26 @@ def admin_token(api_client: requests.Session) -> str:
     if not status_data["has_admin"]:
         register_response = api_client.post(
             f"{BASE_URL}/api/auth/register-admin",
-            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+            json={"email": admin_email, "password": admin_password},
             timeout=20,
         )
         assert register_response.status_code == 200
         payload = register_response.json()
-        assert payload["email"] == ADMIN_EMAIL
+        assert payload["email"] == admin_email
         assert isinstance(payload["token"], str)
         assert len(payload["token"]) > 20
         return payload["token"]
 
     login_response = api_client.post(
         f"{BASE_URL}/api/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        json={"email": admin_email, "password": admin_password},
         timeout=20,
     )
     if login_response.status_code != 200:
         pytest.fail("Admin exists but required credentials failed login; cannot test protected flows")
 
     payload = login_response.json()
-    assert payload["email"] == ADMIN_EMAIL
+    assert payload["email"] == admin_email
     assert isinstance(payload["token"], str)
     assert len(payload["token"]) > 20
     return payload["token"]
@@ -88,8 +101,12 @@ def _audit_action_exists(api_client: requests.Session, token: str, action_type: 
     return any(entry["action_type"] == action_type for entry in logs)
 
 
-def test_auth_status_and_register_bootstrap_behavior(api_client: requests.Session) -> None:
+def test_auth_status_and_register_bootstrap_behavior(
+    api_client: requests.Session, admin_credentials: tuple[str, str]
+) -> None:
     # Feature: auth bootstrap status + register-admin behavior
+    admin_email, admin_password = admin_credentials
+
     status_before = api_client.get(f"{BASE_URL}/api/auth/status", timeout=20)
     assert status_before.status_code == 200
     before_payload = status_before.json()
@@ -98,12 +115,12 @@ def test_auth_status_and_register_bootstrap_behavior(api_client: requests.Sessio
     if before_payload["has_admin"] is False:
         register_response = api_client.post(
             f"{BASE_URL}/api/auth/register-admin",
-            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+            json={"email": admin_email, "password": admin_password},
             timeout=20,
         )
         assert register_response.status_code == 200
         register_payload = register_response.json()
-        assert register_payload["email"] == ADMIN_EMAIL
+        assert register_payload["email"] == admin_email
         assert isinstance(register_payload["token"], str)
         assert len(register_payload["token"]) > 20
 
@@ -115,21 +132,27 @@ def test_auth_status_and_register_bootstrap_behavior(api_client: requests.Sessio
         assert status_after.status_code == 200
         after_payload = status_after.json()
         assert after_payload["has_admin"] is True
-        assert after_payload["authenticated_email"] == ADMIN_EMAIL
+        assert after_payload["authenticated_email"] == admin_email
     else:
         register_reject = api_client.post(
             f"{BASE_URL}/api/auth/register-admin",
-            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+            json={"email": admin_email, "password": admin_password},
             timeout=20,
         )
         assert register_reject.status_code == 409
 
 
-def test_login_failure_records_audit(api_client: requests.Session, admin_token: str) -> None:
+def test_login_failure_records_audit(
+    api_client: requests.Session,
+    admin_token: str,
+    admin_credentials: tuple[str, str],
+) -> None:
     # Feature: failed login returns 401 + audit entry
+    admin_email, _ = admin_credentials
+
     failed_login = api_client.post(
         f"{BASE_URL}/api/auth/login",
-        json={"email": ADMIN_EMAIL, "password": "WrongBadgerPass!"},
+        json={"email": admin_email, "password": "WrongBadgerPass!"},
         timeout=20,
     )
     assert failed_login.status_code == 401
@@ -139,16 +162,22 @@ def test_login_failure_records_audit(api_client: requests.Session, admin_token: 
     assert _audit_action_exists(api_client, admin_token, "login_failed") is True
 
 
-def test_login_success_records_audit(api_client: requests.Session, admin_token: str) -> None:
+def test_login_success_records_audit(
+    api_client: requests.Session,
+    admin_token: str,
+    admin_credentials: tuple[str, str],
+) -> None:
     # Feature: successful login returns token + audit entry
+    admin_email, admin_password = admin_credentials
+
     success_login = api_client.post(
         f"{BASE_URL}/api/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        json={"email": admin_email, "password": admin_password},
         timeout=20,
     )
     assert success_login.status_code == 200
     payload = success_login.json()
-    assert payload["email"] == ADMIN_EMAIL
+    assert payload["email"] == admin_email
     assert isinstance(payload["token"], str)
     assert len(payload["token"]) > 20
 
@@ -167,6 +196,12 @@ def test_settings_endpoints_require_auth(api_client: requests.Session) -> None:
             "auth_mode": "OAuth2",
             "polling_seconds": 30,
             "notification_email": "unauthorized@example.com",
+            "threshold_issue_score_warning": 12,
+            "threshold_issue_score_critical": 18,
+            "threshold_missed_schedules_warning": 3,
+            "threshold_missed_schedules_critical": 5,
+            "threshold_critical_integrations_warning": 20,
+            "threshold_critical_integrations_critical": 35,
         },
         timeout=20,
     )
@@ -186,6 +221,16 @@ def test_settings_persist_with_auth_and_log_audit(api_client: requests.Session, 
         "auth_mode": "API-Key",
         "polling_seconds": 55,
         "notification_email": "alerts-team@example.com",
+        "threshold_issue_score_warning": original_settings["threshold_issue_score_warning"],
+        "threshold_issue_score_critical": original_settings["threshold_issue_score_critical"],
+        "threshold_missed_schedules_warning": original_settings["threshold_missed_schedules_warning"],
+        "threshold_missed_schedules_critical": original_settings["threshold_missed_schedules_critical"],
+        "threshold_critical_integrations_warning": original_settings[
+            "threshold_critical_integrations_warning"
+        ],
+        "threshold_critical_integrations_critical": original_settings[
+            "threshold_critical_integrations_critical"
+        ],
     }
     update_response = api_client.put(
         f"{BASE_URL}/api/settings",
