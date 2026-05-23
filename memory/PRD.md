@@ -19,6 +19,8 @@ User-selected scope:
 - Middleware logs API latency for monitored endpoints into SQLite for UI + benchmark visibility.
 - Settings security uses local admin auth with signed Bearer token, first-run admin bootstrap, and protected settings/audit endpoints.
 - Alerting now reads configurable warning/critical thresholds from Settings and applies them to both alert generation and alert feed visibility.
+- Auth migrated to cookie-first session model with httpOnly session cookie + CSRF double-submit header checks.
+- Repository split initiated: auth and settings/audit persistence moved into dedicated repositories.
 
 ## What Has Been Implemented
 - Seed generation and load of 170 integrations across projects/domains with simulated health states.
@@ -34,7 +36,9 @@ User-selected scope:
 - Configurable threshold controls in Settings for issue score, missed schedules, and critical integration count (warning + critical levels).
 - Threshold-aware backend alert behavior: collector-generated alerts and dashboard feed filtering both respect saved thresholds.
 - Code-quality hardening pass applied: auth register flow variable safety fix, React hook dependency corrections, and test credential env-var migration.
-- Frontend token storage shifted from `localStorage` to `sessionStorage` as an interim security improvement.
+- Frontend token storage removed from app flow; cookie session now primary. Bearer path retained for automated test compatibility.
+- Added auth hardening: password complexity enforcement and temporary lockout after repeated failed login attempts.
+- Added CSRF protection on state-changing endpoints (settings updates, alert acknowledgement, manual collector trigger).
 - API latency logs endpoint + visual latency panels on dashboard/detail.
 - Manual mock collector trigger endpoint and standalone worker script (`backend/mock_collector.py`).
 - Benchmark script (`scripts/benchmark.py`) covering summary/list/detail plus backend latency log output.
@@ -43,7 +47,7 @@ User-selected scope:
 ## Prioritized Backlog
 ### P0 (Must Have Next)
 1. Rotate admin token secret for production-like local environments and add token revocation/expiry refresh controls.
-2. Move from bearer token in JS runtime to httpOnly cookie session auth.
+2. Add server-side session invalidation/revocation table for immediate logout across devices.
 3. Add CI workflow for pytest + frontend build + lint checks on every change.
 
 ### P1 (Should Have)
@@ -57,6 +61,6 @@ User-selected scope:
 3. Add side-by-side comparison of current vs previous collector cycle deltas.
 
 ## Next Tasks
-1. Add optional webhook adapter (while keeping current email-log mode for local operation).
-2. Add alert mute windows/quiet hours and per-rule enable/disable toggles.
-3. Add security hardening for auth (password reset flow + stronger password policy enforcement).
+1. Complete repository decomposition by extracting alerts/integrations domains into smaller repository modules.
+2. Add optional webhook adapter (while keeping current email-log mode for local operation).
+3. Add password reset and secure account recovery workflow.

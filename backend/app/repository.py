@@ -4,8 +4,7 @@ import random
 from datetime import datetime, timedelta, timezone
 
 from app.database import get_connection
-from app.models import IntegrationSummary, RunEvent, SettingsPayload
-from app.services.auth_service import hash_password, verify_password
+from app.models import IntegrationSummary, RunEvent
 from app.services.mock_data import build_seed_dataset
 
 
@@ -377,77 +376,6 @@ class OICRepository:
             connection.commit()
         return cursor.rowcount > 0
 
-    def log_audit(self, *, actor_email: str | None, action_type: str, target: str, details: str) -> None:
-        with get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO audit_logs (actor_email, action_type, target, details, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    actor_email,
-                    action_type,
-                    target,
-                    details,
-                    datetime.now(timezone.utc).isoformat(),
-                ),
-            )
-            connection.commit()
-
-    def get_audit_logs(self, *, limit: int) -> list[dict]:
-        with get_connection() as connection:
-            rows = connection.execute(
-                """
-                SELECT id, actor_email, action_type, target, details, created_at
-                FROM audit_logs
-                ORDER BY created_at DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
-        return [
-            {
-                "id": row["id"],
-                "actor_email": row["actor_email"],
-                "action_type": row["action_type"],
-                "target": row["target"],
-                "details": row["details"],
-                "created_at": datetime.fromisoformat(row["created_at"]),
-            }
-            for row in rows
-        ]
-
-    def has_admin_user(self) -> bool:
-        with get_connection() as connection:
-            count = connection.execute("SELECT COUNT(*) FROM admin_users").fetchone()[0]
-        return count > 0
-
-    def create_first_admin(self, *, email: str, password: str) -> str:
-        if self.has_admin_user():
-            raise ValueError("Admin already exists")
-
-        password_hash, salt = hash_password(password)
-        with get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO admin_users (email, password_hash, salt, created_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (email.lower().strip(), password_hash, salt, datetime.now(timezone.utc).isoformat()),
-            )
-            connection.commit()
-        return email.lower().strip()
-
-    def verify_admin_credentials(self, *, email: str, password: str) -> bool:
-        with get_connection() as connection:
-            row = connection.execute(
-                "SELECT password_hash, salt FROM admin_users WHERE email = ?",
-                (email.lower().strip(),),
-            ).fetchone()
-        if row is None:
-            return False
-        return verify_password(password, row["password_hash"], row["salt"])
-
     def get_integration_detail(self, integration_id: str) -> tuple[IntegrationSummary, str, list[RunEvent]] | None:
         with get_connection() as connection:
             integration_row = connection.execute(
@@ -557,32 +485,6 @@ class OICRepository:
             }
             for row in rows
         ]
-
-    def get_settings(self) -> dict[str, str]:
-        with get_connection() as connection:
-            rows = connection.execute("SELECT key, value FROM settings ORDER BY key").fetchall()
-        return {row["key"]: row["value"] for row in rows}
-
-    def upsert_settings(self, payload: SettingsPayload) -> dict[str, str]:
-        values = {
-            "oic_base_url": payload.oic_base_url,
-            "auth_mode": payload.auth_mode,
-            "polling_seconds": str(payload.polling_seconds),
-            "notification_email": payload.notification_email,
-            "threshold_issue_score_warning": str(payload.threshold_issue_score_warning),
-            "threshold_issue_score_critical": str(payload.threshold_issue_score_critical),
-            "threshold_missed_schedules_warning": str(payload.threshold_missed_schedules_warning),
-            "threshold_missed_schedules_critical": str(payload.threshold_missed_schedules_critical),
-            "threshold_critical_integrations_warning": str(payload.threshold_critical_integrations_warning),
-            "threshold_critical_integrations_critical": str(payload.threshold_critical_integrations_critical),
-        }
-        with get_connection() as connection:
-            connection.executemany(
-                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-                [(key, value) for key, value in values.items()],
-            )
-            connection.commit()
-        return values
 
     def collect_mock_cycle(self) -> int:
         now = datetime.now(timezone.utc)

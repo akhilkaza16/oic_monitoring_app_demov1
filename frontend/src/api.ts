@@ -47,8 +47,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const details = await response.text();
-    throw new Error(`Request failed: ${response.status} ${details}`);
+    const contentType = response.headers.get("content-type") || "";
+    let details = "";
+    if (contentType.includes("application/json")) {
+      const payload = (await response.json()) as { detail?: string | Record<string, unknown> };
+      if (typeof payload.detail === "string") {
+        details = payload.detail;
+      } else if (payload.detail) {
+        details = JSON.stringify(payload.detail);
+      }
+    } else {
+      details = await response.text();
+    }
+
+    const message = details ? `${response.status}: ${details}` : `Request failed with status ${response.status}`;
+    throw new Error(message);
   }
 
   return (await response.json()) as T;
