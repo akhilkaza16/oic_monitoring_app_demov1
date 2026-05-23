@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+node_modules/
+dist/
+backend/data/*.db
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials

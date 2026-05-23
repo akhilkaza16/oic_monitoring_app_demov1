@@ -1,0 +1,139 @@
+{
+  "theme": "LIGHT",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "branding": {
+    "colors": {
+      "primary": "#019581",
+      "primary_hover": "#017d6c",
+      "primary_active": "#016053",
+      "heading": "#016B5E",
+      "background": "#F9FAFB",
+      "surface": "#FFFFFF",
+      "border": "#E5E7EB",
+      "status": {
+        "critical": "#EF4444",
+        "warning": "#F59E0B",
+        "success": "#10B981",
+        "info": "#3B82F6",
+        "unknown": "#6B7280"
+      },
+      "text": {
+        "primary": "#111827",
+        "secondary": "#4B5563",
+        "muted": "#6B7280"
+      }
+    },
+    "typography": {
+      "headings": {
+        "fontFamily": "Arial, Helvetica, sans-serif",
+        "weight": "font-bold",
+        "letterSpacing": "tracking-tight"
+      },
+      "body": {
+        "fontFamily": "system-ui, -apple-system, sans-serif",
+        "weight": "font-normal",
+        "letterSpacing": "tracking-normal"
+      },
+      "mono": {
+        "fontFamily": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        "weight": "font-normal"
+      }
+    }
+  },
+  "layout": {
+    "strategy": "CONTROL ROOM",
+    "grid": {
+      "base": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6"
+    },
+    "spacing": {
+      "section_padding": "py-6 px-4 md:px-8",
+      "card_padding": "p-4 md:p-6"
+    },
+    "borders": {
+      "radius": "rounded-md",
+      "width": "border",
+      "style": "border-solid border-gray-200"
+    },
+    "shadows": {
+      "card": "shadow-sm",
+      "hover": "shadow-md"
+    }
+  },
+  "components": {
+    "header": {
+      "background": "bg-white",
+      "border": "border-b border-gray-200",
+      "layout": "flex items-center justify-between px-6 py-4",
+      "instructions": "Sticky header (z-50) with logo, navigation links, and auto-refresh toggle/indicator."
+    },
+    "sidebar_or_nav": {
+      "background": "bg-white",
+      "border": "border-b md:border-b-0 md:border-r border-gray-200"
+    },
+    "card": {
+      "background": "bg-white",
+      "border": "border border-gray-200",
+      "radius": "rounded-md",
+      "shadow": "shadow-sm",
+      "instructions": "Use flat background, 1px subtle border. No excessive shadows. For interactive cards, add hover:-translate-y-1 hover:shadow-md transition-all duration-200."
+    },
+    "button": {
+      "primary": "bg-[#019581] hover:bg-[#017d6c] text-white font-medium rounded-md px-4 py-2 transition-colors",
+      "secondary": "bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium rounded-md px-4 py-2 transition-colors",
+      "danger": "bg-red-500 hover:bg-red-600 text-white font-medium rounded-md px-4 py-2 transition-colors"
+    },
+    "table": {
+      "header_bg": "bg-[#019581]",
+      "header_text": "text-white font-medium text-sm tracking-wider",
+      "row_bg": "bg-white hover:bg-gray-50 transition-colors",
+      "border": "border-b border-gray-200",
+      "instructions": "Dense table layout. Left align text, center align status badges/icons."
+    },
+    "status_badge": {
+      "critical": "bg-red-100 text-red-800 border border-red-200 px-2.5 py-0.5 rounded-full text-xs font-medium",
+      "warning": "bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-xs font-medium",
+      "success": "bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full text-xs font-medium",
+      "info": "bg-blue-100 text-blue-800 border border-blue-200 px-2.5 py-0.5 rounded-full text-xs font-medium",
+      "unknown": "bg-gray-100 text-gray-800 border border-gray-200 px-2.5 py-0.5 rounded-full text-xs font-medium"
+    }
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "instructions": "Use Phosphor Icons for dense dashboard readability. Provide the command `yarn add @phosphor-icons/react` for the main agent."
+  },
+  "motion": {
+    "transitions": "transition-all duration-200 ease-in-out",
+    "hover_state": "hover:-translate-y-0.5",
+    "instructions": "Minimalist animations. Use micro-interactions for feedback on buttons and table rows."
+  },
+  "pages": {
+    "ExecutiveOverview": {
+      "instructions": "Bento grid layout. Top row: Key Metrics (Health Score, Total Count, Critical Incidents). Middle row: Top failing integrations list and API Latency sparkline. Auto-refresh indicator in the header."
+    },
+    "IntegrationList": {
+      "instructions": "Full-width data table. Filterable by status, project, domain. Clickable rows to navigate to Detail page."
+    },
+    "IntegrationDetail": {
+      "instructions": "Grid layout. Left column (span 2): Integration metadata, run history, API latency logs. Right column (span 1): Status panel, error recommendations rules engine output."
+    },
+    "Settings": {
+      "instructions": "Simple form layout for future OIC configurations. Use Shadcn-like form inputs."
+    }
+  },
+  "testing": {
+    "instructions": "Add `data-testid` to all interactive elements. e.g. `data-testid=\"auto-refresh-toggle\"`, `data-testid=\"integration-row-1\"`."
+  },
+  "instructions_to_main_agent": [
+    "Install Phosphor Icons: yarn add @phosphor-icons/react",
+    "Use standard Tailwind CSS classes. No need for complex Shadcn setups unless utilizing raw HTML/Tailwind.",
+    "Implement 30s auto-refresh interval using standard React `useEffect` and `setInterval`.",
+    "Implement rules engine visually as a priority list (top 3) in the detail view.",
+    "Apply Badger Green (#019581) strictly to nav, buttons, table headers, and accents as requested.",
+    "Apply Badger Green Dark (#016B5E) strictly to section headings.",
+    "Implement API latency logging view using Recharts if possible, or simple styled HTML bars.",
+    "Add the benchmark script in Python or Shell as requested in the root directory."
+  ],
+  "media": {
+    "image_urls": []
+  }
+}
