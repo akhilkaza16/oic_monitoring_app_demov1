@@ -24,6 +24,9 @@ const DEFAULT_FORM: SettingsPayload = {
   webhook_enabled: false,
   webhook_url: "",
   webhook_bearer_token: "",
+  webhook_max_retries: 3,
+  webhook_initial_backoff_seconds: 0.5,
+  webhook_timeout_seconds: 3,
 };
 
 export default function SettingsPage() {
@@ -133,6 +136,18 @@ export default function SettingsPage() {
     }
     if (form.webhook_enabled && (!form.webhook_url.trim() || !form.webhook_bearer_token.trim())) {
       setStatus("Webhook URL and webhook bearer token are required when webhook is enabled");
+      return;
+    }
+    if (form.webhook_max_retries < 1 || form.webhook_max_retries > 3) {
+      setStatus("Webhook max retries must be between 1 and 3");
+      return;
+    }
+    if (form.webhook_initial_backoff_seconds < 0.5 || form.webhook_initial_backoff_seconds > 2) {
+      setStatus("Webhook initial backoff must be between 0.5 and 2.0 seconds");
+      return;
+    }
+    if (form.webhook_timeout_seconds < 2 || form.webhook_timeout_seconds > 6) {
+      setStatus("Webhook timeout must be between 2 and 6 seconds");
       return;
     }
     setIsSaving(true);
@@ -462,6 +477,52 @@ export default function SettingsPage() {
                 setForm((current) => ({ ...current, webhook_bearer_token: event.target.value }))
               }
               data-testid="settings-webhook-token-input"
+            />
+          </label>
+
+          <label className="field">
+            <span data-testid="settings-webhook-retries-label">Max Retries (1-3)</span>
+            <input
+              type="number"
+              min={1}
+              max={3}
+              value={form.webhook_max_retries}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, webhook_max_retries: Number(event.target.value) }))
+              }
+              data-testid="settings-webhook-retries-input"
+            />
+          </label>
+
+          <label className="field">
+            <span data-testid="settings-webhook-backoff-label">Initial Backoff Seconds (0.5-2.0)</span>
+            <input
+              type="number"
+              min={0.5}
+              max={2}
+              step={0.1}
+              value={form.webhook_initial_backoff_seconds}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  webhook_initial_backoff_seconds: Number(event.target.value),
+                }))
+              }
+              data-testid="settings-webhook-backoff-input"
+            />
+          </label>
+
+          <label className="field">
+            <span data-testid="settings-webhook-timeout-label">Timeout Seconds (2-6)</span>
+            <input
+              type="number"
+              min={2}
+              max={6}
+              value={form.webhook_timeout_seconds}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, webhook_timeout_seconds: Number(event.target.value) }))
+              }
+              data-testid="settings-webhook-timeout-input"
             />
           </label>
         </section>

@@ -96,6 +96,20 @@ def _read_bearer_token(authorization: str | None) -> str | None:
     return authorization.replace("Bearer ", "", 1).strip()
 
 
+def _to_int(value: str | None, default: int) -> int:
+    try:
+        return int(value) if value is not None and str(value).strip() != "" else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_float(value: str | None, default: float) -> float:
+    try:
+        return float(value) if value is not None and str(value).strip() != "" else default
+    except (TypeError, ValueError):
+        return default
+
+
 def _resolve_auth_token(request: Request, authorization: str | None) -> tuple[str | None, bool]:
     bearer_token = _read_bearer_token(authorization)
     if bearer_token:
@@ -410,27 +424,33 @@ def latency_logs(
 
 
 @app.get("/api/settings")
-def get_settings(request: Request, authorization: str | None = Header(default=None)) -> dict[str, str | int]:
+def get_settings(
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> dict[str, str | int | float | bool]:
     _require_actor_email(request, authorization)
     values = settings_repository.get_settings()
     return {
         "oic_base_url": values.get("oic_base_url", ""),
         "auth_mode": values.get("auth_mode", "OAuth2"),
-        "polling_seconds": int(values.get("polling_seconds", "30")),
+        "polling_seconds": _to_int(values.get("polling_seconds"), 30),
         "notification_email": values.get("notification_email", ""),
-        "threshold_issue_score_warning": int(values.get("threshold_issue_score_warning", "12")),
-        "threshold_issue_score_critical": int(values.get("threshold_issue_score_critical", "18")),
-        "threshold_missed_schedules_warning": int(values.get("threshold_missed_schedules_warning", "3")),
-        "threshold_missed_schedules_critical": int(values.get("threshold_missed_schedules_critical", "5")),
-        "threshold_critical_integrations_warning": int(
-            values.get("threshold_critical_integrations_warning", "20")
+        "threshold_issue_score_warning": _to_int(values.get("threshold_issue_score_warning"), 12),
+        "threshold_issue_score_critical": _to_int(values.get("threshold_issue_score_critical"), 18),
+        "threshold_missed_schedules_warning": _to_int(values.get("threshold_missed_schedules_warning"), 3),
+        "threshold_missed_schedules_critical": _to_int(values.get("threshold_missed_schedules_critical"), 5),
+        "threshold_critical_integrations_warning": _to_int(
+            values.get("threshold_critical_integrations_warning"), 20
         ),
-        "threshold_critical_integrations_critical": int(
-            values.get("threshold_critical_integrations_critical", "35")
+        "threshold_critical_integrations_critical": _to_int(
+            values.get("threshold_critical_integrations_critical"), 35
         ),
         "webhook_enabled": values.get("webhook_enabled", "false").lower() == "true",
         "webhook_url": values.get("webhook_url", ""),
         "webhook_bearer_token": values.get("webhook_bearer_token", ""),
+        "webhook_max_retries": _to_int(values.get("webhook_max_retries"), 3),
+        "webhook_initial_backoff_seconds": _to_float(values.get("webhook_initial_backoff_seconds"), 0.5),
+        "webhook_timeout_seconds": _to_int(values.get("webhook_timeout_seconds"), 3),
     }
 
 
@@ -440,7 +460,7 @@ def put_settings(
     request: Request,
     authorization: str | None = Header(default=None),
     x_csrf_token: str | None = Header(default=None),
-) -> dict[str, str | int]:
+) -> dict[str, str | int | float | bool]:
     actor = _require_actor_email(
         request,
         authorization,
@@ -487,8 +507,22 @@ def put_settings(
         "webhook_enabled": saved["webhook_enabled"].lower() == "true",
         "webhook_url": saved["webhook_url"],
         "webhook_bearer_token": saved["webhook_bearer_token"],
+        "webhook_max_retries": int(saved["webhook_max_retries"]),
+        "webhook_initial_backoff_seconds": float(saved["webhook_initial_backoff_seconds"]),
+        "webhook_timeout_seconds": int(saved["webhook_timeout_seconds"]),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@app.get("/api/webhook-delivery-logs")
+def webhook_delivery_logs(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    status: str = Query(default="all", pattern="^(all|success|failed)$"),
+    limit: int = Query(default=60, ge=1, le=300),
+) -> dict:
+    _require_actor_email(request, authorization)
+    return settings_repository.get_webhook_delivery_logs(limit=limit, status=status)
 
 
 @app.get("/api/audit-logs", response_model=list[AuditLogEntry])

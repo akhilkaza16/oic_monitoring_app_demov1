@@ -205,6 +205,9 @@ def test_settings_endpoints_require_auth(api_client: requests.Session) -> None:
             "webhook_enabled": False,
             "webhook_url": "",
             "webhook_bearer_token": "",
+            "webhook_max_retries": 3,
+            "webhook_initial_backoff_seconds": 0.5,
+            "webhook_timeout_seconds": 3,
         },
         timeout=20,
     )
@@ -237,6 +240,9 @@ def test_settings_persist_with_auth_and_log_audit(api_client: requests.Session, 
         "webhook_enabled": original_settings["webhook_enabled"],
         "webhook_url": original_settings["webhook_url"],
         "webhook_bearer_token": original_settings["webhook_bearer_token"],
+        "webhook_max_retries": original_settings["webhook_max_retries"],
+        "webhook_initial_backoff_seconds": original_settings["webhook_initial_backoff_seconds"],
+        "webhook_timeout_seconds": original_settings["webhook_timeout_seconds"],
     }
     update_response = api_client.put(
         f"{BASE_URL}/api/settings",

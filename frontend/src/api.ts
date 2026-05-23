@@ -15,6 +15,7 @@ import {
   SettingsPayload,
   SessionRevokeResponse,
   TrendSnapshot,
+  WebhookDeliveryLogResponse,
 } from "./types";
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL;
@@ -161,6 +162,13 @@ export function revokeAllSessions(): Promise<SessionRevokeResponse> {
   return request<SessionRevokeResponse>("/api/security/revoke-sessions", {
     method: "POST",
   });
+}
+
+export function getWebhookDeliveryLogs(
+  status: "all" | "success" | "failed",
+  limit = 80
+): Promise<WebhookDeliveryLogResponse> {
+  return request<WebhookDeliveryLogResponse>(`/api/webhook-delivery-logs?status=${status}&limit=${limit}`);
 }
 
 export function getSettings(): Promise<SettingsPayload> {

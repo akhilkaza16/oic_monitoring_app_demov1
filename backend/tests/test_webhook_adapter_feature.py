@@ -123,6 +123,9 @@ def test_settings_api_webhook_fields_and_required_validation(
     assert "webhook_enabled" in current_payload
     assert "webhook_url" in current_payload
     assert "webhook_bearer_token" in current_payload
+    assert "webhook_max_retries" in current_payload
+    assert "webhook_initial_backoff_seconds" in current_payload
+    assert "webhook_timeout_seconds" in current_payload
 
     invalid_payload = {**current_payload, "webhook_enabled": True, "webhook_url": "", "webhook_bearer_token": ""}
     invalid_response = api_client.put(f"{BASE_URL}/api/settings", json=invalid_payload, headers=headers, timeout=20)
@@ -150,6 +153,9 @@ def test_webhook_adapter_retries_three_times_with_backoff_and_logs_failed_delive
             "webhook_enabled": True,
             "webhook_url": "https://127.0.0.1:1/unreachable",
             "webhook_bearer_token": "token-abc",
+            "webhook_max_retries": 3,
+            "webhook_initial_backoff_seconds": 0.5,
+            "webhook_timeout_seconds": 3,
         })()
     )
 
@@ -201,6 +207,9 @@ def test_webhook_adapter_payload_minimal_contract(monkeypatch) -> None:
             "webhook_enabled": True,
             "webhook_url": "https://example.com/hook",
             "webhook_bearer_token": "token-minimal",
+            "webhook_max_retries": 3,
+            "webhook_initial_backoff_seconds": 0.5,
+            "webhook_timeout_seconds": 3,
         })()
     )
 

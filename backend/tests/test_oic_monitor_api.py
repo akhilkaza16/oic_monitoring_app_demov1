@@ -180,6 +180,9 @@ def test_settings_get_and_put_persist(api_client: requests.Session) -> None:
         "webhook_enabled": before["webhook_enabled"],
         "webhook_url": before["webhook_url"],
         "webhook_bearer_token": before["webhook_bearer_token"],
+        "webhook_max_retries": before["webhook_max_retries"],
+        "webhook_initial_backoff_seconds": before["webhook_initial_backoff_seconds"],
+        "webhook_timeout_seconds": before["webhook_timeout_seconds"],
     }
     put_resp = api_client.put(f"{BASE_URL}/api/settings", json=update_payload, headers=headers, timeout=20)
     assert put_resp.status_code == 200

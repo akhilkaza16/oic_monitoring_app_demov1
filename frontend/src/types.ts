@@ -83,6 +83,9 @@ export interface SettingsPayload {
   webhook_enabled: boolean;
   webhook_url: string;
   webhook_bearer_token: string;
+  webhook_max_retries: number;
+  webhook_initial_backoff_seconds: number;
+  webhook_timeout_seconds: number;
 }
 
 export interface AuthStatus {
@@ -118,6 +121,26 @@ export interface PasswordResetConfirmPayload {
 
 export interface SessionRevokeResponse {
   revoked_sessions: number;
+}
+
+export interface WebhookDeliveryLogItem {
+  id: number;
+  event_type: string;
+  severity: string;
+  status: "success" | "failed";
+  attempts: number;
+  http_status: number | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface WebhookDeliveryLogResponse {
+  summary: {
+    success: number;
+    failed: number;
+    total: number;
+  };
+  items: WebhookDeliveryLogItem[];
 }
 
 export interface AuditLogEntry {

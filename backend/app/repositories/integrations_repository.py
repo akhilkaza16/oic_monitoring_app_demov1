@@ -369,9 +369,14 @@ class IntegrationsRepository:
             "webhook_enabled": "false",
             "webhook_url": "",
             "webhook_bearer_token": "",
+            "webhook_max_retries": "3",
+            "webhook_initial_backoff_seconds": "0.5",
+            "webhook_timeout_seconds": "3",
         }
         for key, value in required_settings_defaults.items():
-            connection.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
-                (key, value),
-            )
+            existing = connection.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+            if existing is None or str(existing[0]).strip() == "":
+                connection.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                    (key, value),
+                )

@@ -25,6 +25,9 @@ class WebhookAdapter:
         webhook_enabled = settings.get("webhook_enabled", "false").lower() == "true"
         webhook_url = settings.get("webhook_url", "").strip()
         webhook_token = settings.get("webhook_bearer_token", "").strip()
+        max_retries = min(3, max(1, int(settings.get("webhook_max_retries", "3"))))
+        initial_backoff = min(2.0, max(0.5, float(settings.get("webhook_initial_backoff_seconds", "0.5"))))
+        timeout_seconds = min(6, max(2, int(settings.get("webhook_timeout_seconds", "3"))))
 
         if not webhook_enabled or not webhook_url:
             return
@@ -43,10 +46,15 @@ class WebhookAdapter:
         last_status = None
         last_error = None
 
-        for attempt in range(1, 4):
+        for attempt in range(1, max_retries + 1):
             attempts = attempt
             try:
-                response = requests.post(webhook_url, json=payload, headers=headers, timeout=3)
+                response = requests.post(
+                    webhook_url,
+                    json=payload,
+                    headers=headers,
+                    timeout=timeout_seconds,
+                )
                 last_status = response.status_code
                 if 200 <= response.status_code < 300:
                     self._log_delivery(
@@ -62,8 +70,8 @@ class WebhookAdapter:
             except requests.RequestException as exc:
                 last_error = str(exc)
 
-            if attempt < 3:
-                time.sleep(0.5 * (2 ** (attempt - 1)))
+            if attempt < max_retries:
+                time.sleep(initial_backoff * (2 ** (attempt - 1)))
 
         self._log_delivery(
             event_type="oic_alert",

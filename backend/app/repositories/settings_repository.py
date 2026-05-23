@@ -27,6 +27,9 @@ class SettingsRepository:
             "webhook_enabled": "true" if payload.webhook_enabled else "false",
             "webhook_url": payload.webhook_url,
             "webhook_bearer_token": payload.webhook_bearer_token,
+            "webhook_max_retries": str(payload.webhook_max_retries),
+            "webhook_initial_backoff_seconds": str(payload.webhook_initial_backoff_seconds),
+            "webhook_timeout_seconds": str(payload.webhook_timeout_seconds),
         }
         with get_connection() as connection:
             connection.executemany(
@@ -75,3 +78,44 @@ class SettingsRepository:
             }
             for row in rows
         ]
+
+    def get_webhook_delivery_logs(self, *, limit: int, status: str) -> dict:
+        query = """
+            SELECT id, event_type, severity, status, attempts, http_status, error_message, created_at
+            FROM webhook_delivery_logs
+        """
+        params: list[str | int] = []
+        if status != "all":
+            query += " WHERE status = ?"
+            params.append(status)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        with get_connection() as connection:
+            rows = connection.execute(query, params).fetchall()
+            summary_rows = connection.execute(
+                "SELECT status, COUNT(*) as count FROM webhook_delivery_logs GROUP BY status"
+            ).fetchall()
+
+        summary = {"success": 0, "failed": 0, "total": 0}
+        for row in summary_rows:
+            key = row["status"]
+            if key in summary:
+                summary[key] = row["count"]
+            summary["total"] += row["count"]
+
+        items = [
+            {
+                "id": row["id"],
+                "event_type": row["event_type"],
+                "severity": row["severity"],
+                "status": row["status"],
+                "attempts": row["attempts"],
+                "http_status": row["http_status"],
+                "error_message": row["error_message"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
+        return {"summary": summary, "items": items}

@@ -150,6 +150,9 @@ def build_seed_dataset(total: int = 170) -> tuple[list[dict], list[dict], dict[s
         "webhook_enabled": "false",
         "webhook_url": "",
         "webhook_bearer_token": "",
+        "webhook_max_retries": "3",
+        "webhook_initial_backoff_seconds": "0.5",
+        "webhook_timeout_seconds": "3",
     }
 
     return integrations, run_events, settings
