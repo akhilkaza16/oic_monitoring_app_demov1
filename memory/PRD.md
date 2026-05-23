@@ -21,6 +21,8 @@ User-selected scope:
 - Alerting now reads configurable warning/critical thresholds from Settings and applies them to both alert generation and alert feed visibility.
 - Auth migrated to cookie-first session model with httpOnly session cookie + CSRF double-submit header checks.
 - Repository split initiated: auth and settings/audit persistence moved into dedicated repositories.
+- Security domain expanded with password reset and session lifecycle controls.
+- Repository domain split expanded to dedicated alerts/integrations/trends/latency/collector repository layers.
 
 ## What Has Been Implemented
 - Seed generation and load of 170 integrations across projects/domains with simulated health states.
@@ -39,6 +41,9 @@ User-selected scope:
 - Frontend token storage removed from app flow; cookie session now primary. Bearer path retained for automated test compatibility.
 - Added auth hardening: password complexity enforcement and temporary lockout after repeated failed login attempts.
 - Added CSRF protection on state-changing endpoints (settings updates, alert acknowledgement, manual collector trigger).
+- Added password reset flow with one-time on-screen reset code and 60-minute expiry.
+- Added server-side session revocation: auto-revoke previous sessions on new login + manual revoke-all endpoint.
+- Added dedicated Security page for reset-code request/confirm and revoke-all sessions control.
 - API latency logs endpoint + visual latency panels on dashboard/detail.
 - Manual mock collector trigger endpoint and standalone worker script (`backend/mock_collector.py`).
 - Benchmark script (`scripts/benchmark.py`) covering summary/list/detail plus backend latency log output.
@@ -47,7 +52,7 @@ User-selected scope:
 ## Prioritized Backlog
 ### P0 (Must Have Next)
 1. Rotate admin token secret for production-like local environments and add token revocation/expiry refresh controls.
-2. Add server-side session invalidation/revocation table for immediate logout across devices.
+2. Add per-session management API (list active sessions, revoke individual session IDs).
 3. Add CI workflow for pytest + frontend build + lint checks on every change.
 
 ### P1 (Should Have)
@@ -61,6 +66,6 @@ User-selected scope:
 3. Add side-by-side comparison of current vs previous collector cycle deltas.
 
 ## Next Tasks
-1. Complete repository decomposition by extracting alerts/integrations domains into smaller repository modules.
+1. Continue refactoring legacy `repository.py` internals into fully independent domain repositories (remove remaining monolith logic).
 2. Add optional webhook adapter (while keeping current email-log mode for local operation).
-3. Add password reset and secure account recovery workflow.
+3. Add stronger account recovery safeguards (reset attempt throttling + verification challenge).

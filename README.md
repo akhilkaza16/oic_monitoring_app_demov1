@@ -23,6 +23,7 @@ Local proof-of-concept dashboard for monitoring **170 mock Oracle Integration Cl
 10. Settings authentication with first-run local admin creation + audit logs (settings updates, login attempts, manual collector triggers)
 11. Benchmark script for key read endpoints with latency report output
 12. Settings page for future OIC connector configuration (kept abstract)
+13. Dedicated Security page with one-time password reset codes and server-side session revocation controls
 
 ## Project Structure
 
