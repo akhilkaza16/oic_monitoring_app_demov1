@@ -177,6 +177,9 @@ def test_settings_get_and_put_persist(api_client: requests.Session) -> None:
         "threshold_missed_schedules_critical": before["threshold_missed_schedules_critical"],
         "threshold_critical_integrations_warning": before["threshold_critical_integrations_warning"],
         "threshold_critical_integrations_critical": before["threshold_critical_integrations_critical"],
+        "webhook_enabled": before["webhook_enabled"],
+        "webhook_url": before["webhook_url"],
+        "webhook_bearer_token": before["webhook_bearer_token"],
     }
     put_resp = api_client.put(f"{BASE_URL}/api/settings", json=update_payload, headers=headers, timeout=20)
     assert put_resp.status_code == 200

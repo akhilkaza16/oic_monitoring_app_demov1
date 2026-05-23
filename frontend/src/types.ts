@@ -80,6 +80,9 @@ export interface SettingsPayload {
   threshold_missed_schedules_critical: number;
   threshold_critical_integrations_warning: number;
   threshold_critical_integrations_critical: number;
+  webhook_enabled: boolean;
+  webhook_url: string;
+  webhook_bearer_token: string;
 }
 
 export interface AuthStatus {

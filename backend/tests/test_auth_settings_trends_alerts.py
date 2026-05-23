@@ -202,6 +202,9 @@ def test_settings_endpoints_require_auth(api_client: requests.Session) -> None:
             "threshold_missed_schedules_critical": 5,
             "threshold_critical_integrations_warning": 20,
             "threshold_critical_integrations_critical": 35,
+            "webhook_enabled": False,
+            "webhook_url": "",
+            "webhook_bearer_token": "",
         },
         timeout=20,
     )
@@ -231,6 +234,9 @@ def test_settings_persist_with_auth_and_log_audit(api_client: requests.Session, 
         "threshold_critical_integrations_critical": original_settings[
             "threshold_critical_integrations_critical"
         ],
+        "webhook_enabled": original_settings["webhook_enabled"],
+        "webhook_url": original_settings["webhook_url"],
+        "webhook_bearer_token": original_settings["webhook_bearer_token"],
     }
     update_response = api_client.put(
         f"{BASE_URL}/api/settings",

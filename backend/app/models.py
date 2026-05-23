@@ -84,6 +84,9 @@ class SettingsPayload(BaseModel):
     threshold_missed_schedules_critical: int = Field(..., ge=1, le=60)
     threshold_critical_integrations_warning: int = Field(..., ge=1, le=170)
     threshold_critical_integrations_critical: int = Field(..., ge=1, le=170)
+    webhook_enabled: bool
+    webhook_url: str
+    webhook_bearer_token: str
 
 
 class AuthPayload(BaseModel):

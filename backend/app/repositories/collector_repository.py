@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import random
+import threading
 from datetime import datetime, timedelta, timezone
 
 from app.database import get_connection
+from app.services.webhook_adapter import WebhookAdapter
 
 
 def _compute_health_score(*, healthy: int, warning: int, critical: int, unknown: int) -> float:
@@ -15,6 +17,9 @@ def _compute_health_score(*, healthy: int, warning: int, critical: int, unknown:
 
 
 class CollectorRepository:
+    def __init__(self, webhook_adapter: WebhookAdapter | None = None) -> None:
+        self.webhook_adapter = webhook_adapter
+
     def collect_mock_cycle(self) -> int:
         now = datetime.now(timezone.utc)
         rng = random.Random(int(now.timestamp()))
@@ -130,7 +135,7 @@ class CollectorRepository:
                         (row["integration_id"], recent_window),
                     ).fetchone()
                     if existing is None:
-                        connection.execute(
+                        cursor = connection.execute(
                             """
                             INSERT INTO alert_events (
                               severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
@@ -148,6 +153,13 @@ class CollectorRepository:
                                 total_issue_score,
                             ),
                         )
+                        self._send_webhook(
+                            severity=severity,
+                            integration_id=row["integration_id"],
+                            title="Integration issue score threshold breached",
+                            event_time_iso=now.isoformat(),
+                            inserted_id=cursor.lastrowid,
+                        )
 
                 if missed >= missed_warning:
                     schedule_severity = "critical" if missed >= missed_critical else "warning"
@@ -164,7 +176,7 @@ class CollectorRepository:
                         (row["integration_id"], (now - timedelta(minutes=60)).isoformat()),
                     ).fetchone()
                     if existing_schedule is None:
-                        connection.execute(
+                        cursor = connection.execute(
                             """
                             INSERT INTO alert_events (
                               severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
@@ -181,6 +193,13 @@ class CollectorRepository:
                                 "missed_schedules",
                                 missed,
                             ),
+                        )
+                        self._send_webhook(
+                            severity=schedule_severity,
+                            integration_id=row["integration_id"],
+                            title="Scheduler reliability warning",
+                            event_time_iso=now.isoformat(),
+                            inserted_id=cursor.lastrowid,
                         )
                 updated += 1
 
@@ -210,7 +229,7 @@ class CollectorRepository:
                 ).fetchone()
                 if existing_system is None:
                     severity = "critical" if critical >= critical_count_critical else "warning"
-                    connection.execute(
+                    cursor = connection.execute(
                         """
                         INSERT INTO alert_events (
                           severity, integration_id, title, message, simulated_email_to, created_at, acknowledged,
@@ -225,6 +244,13 @@ class CollectorRepository:
                             now.isoformat(),
                             critical,
                         ),
+                    )
+                    self._send_webhook(
+                        severity=severity,
+                        integration_id="SYSTEM",
+                        title="Critical integration count threshold breached",
+                        event_time_iso=now.isoformat(),
+                        inserted_id=cursor.lastrowid,
                     )
 
             connection.execute(
@@ -262,3 +288,28 @@ class CollectorRepository:
         if current_status == "critical":
             return [0.18, 0.34, 0.40, 0.08]
         return [0.30, 0.25, 0.25, 0.20]
+
+    def _send_webhook(
+        self,
+        *,
+        severity: str,
+        integration_id: str,
+        title: str,
+        event_time_iso: str,
+        inserted_id: int | None,
+    ) -> None:
+        if not self.webhook_adapter or inserted_id is None:
+            return
+        try:
+            threading.Thread(
+                target=self.webhook_adapter.send_alert_event,
+                kwargs={
+                    "severity": severity,
+                    "integration_id": integration_id,
+                    "alert_title": title,
+                    "event_time_iso": event_time_iso,
+                },
+                daemon=True,
+            ).start()
+        except Exception:
+            pass

@@ -147,6 +147,9 @@ def build_seed_dataset(total: int = 170) -> tuple[list[dict], list[dict], dict[s
         "threshold_missed_schedules_critical": "5",
         "threshold_critical_integrations_warning": "20",
         "threshold_critical_integrations_critical": "35",
+        "webhook_enabled": "false",
+        "webhook_url": "",
+        "webhook_bearer_token": "",
     }
 
     return integrations, run_events, settings

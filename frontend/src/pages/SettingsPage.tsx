@@ -21,6 +21,9 @@ const DEFAULT_FORM: SettingsPayload = {
   threshold_missed_schedules_critical: 5,
   threshold_critical_integrations_warning: 20,
   threshold_critical_integrations_critical: 35,
+  webhook_enabled: false,
+  webhook_url: "",
+  webhook_bearer_token: "",
 };
 
 export default function SettingsPage() {
@@ -126,6 +129,10 @@ export default function SettingsPage() {
     }
     if (form.threshold_critical_integrations_warning > form.threshold_critical_integrations_critical) {
       setStatus("Critical integration count warning must be less than or equal to critical threshold");
+      return;
+    }
+    if (form.webhook_enabled && (!form.webhook_url.trim() || !form.webhook_bearer_token.trim())) {
+      setStatus("Webhook URL and webhook bearer token are required when webhook is enabled");
       return;
     }
     setIsSaving(true);
@@ -413,6 +420,48 @@ export default function SettingsPage() {
                 }))
               }
               data-testid="threshold-critical-count-critical-input"
+            />
+          </label>
+        </section>
+
+        <section className="threshold-grid" data-testid="settings-webhook-grid">
+          <h3 className="section-heading" data-testid="settings-webhook-heading">
+            Webhook Notification Adapter
+          </h3>
+
+          <label className="field">
+            <span data-testid="settings-webhook-enabled-label">Enable Webhook Notifications</span>
+            <select
+              value={form.webhook_enabled ? "true" : "false"}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, webhook_enabled: event.target.value === "true" }))
+              }
+              data-testid="settings-webhook-enabled-select"
+            >
+              <option value="false">Disabled</option>
+              <option value="true">Enabled</option>
+            </select>
+          </label>
+
+          <label className="field">
+            <span data-testid="settings-webhook-url-label">Webhook URL</span>
+            <input
+              value={form.webhook_url}
+              onChange={(event) => setForm((current) => ({ ...current, webhook_url: event.target.value }))}
+              placeholder="https://example.com/webhook"
+              data-testid="settings-webhook-url-input"
+            />
+          </label>
+
+          <label className="field">
+            <span data-testid="settings-webhook-token-label">Webhook Bearer Token</span>
+            <input
+              type="password"
+              value={form.webhook_bearer_token}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, webhook_bearer_token: event.target.value }))
+              }
+              data-testid="settings-webhook-token-input"
             />
           </label>
         </section>

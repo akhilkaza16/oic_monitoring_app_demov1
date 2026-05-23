@@ -24,6 +24,9 @@ class SettingsRepository:
             "threshold_missed_schedules_critical": str(payload.threshold_missed_schedules_critical),
             "threshold_critical_integrations_warning": str(payload.threshold_critical_integrations_warning),
             "threshold_critical_integrations_critical": str(payload.threshold_critical_integrations_critical),
+            "webhook_enabled": "true" if payload.webhook_enabled else "false",
+            "webhook_url": payload.webhook_url,
+            "webhook_bearer_token": payload.webhook_bearer_token,
         }
         with get_connection() as connection:
             connection.executemany(

@@ -34,14 +34,16 @@ from app.repositories.settings_repository import SettingsRepository
 from app.repositories.trends_repository import TrendsRepository
 from app.services.auth_service import create_token, validate_token_data
 from app.services.rules_engine import build_recommendations
+from app.services.webhook_adapter import WebhookAdapter
 
 auth_repository = AuthRepository()
 settings_repository = SettingsRepository()
+webhook_adapter = WebhookAdapter(settings_repository)
 integrations_repository = IntegrationsRepository()
 alerts_repository = AlertsRepository()
 trends_repository = TrendsRepository()
 latency_repository = LatencyRepository()
-collector_repository = CollectorRepository()
+collector_repository = CollectorRepository(webhook_adapter=webhook_adapter)
 
 SESSION_COOKIE_NAME = "session_token"
 CSRF_COOKIE_NAME = "csrf_token"
@@ -426,6 +428,9 @@ def get_settings(request: Request, authorization: str | None = Header(default=No
         "threshold_critical_integrations_critical": int(
             values.get("threshold_critical_integrations_critical", "35")
         ),
+        "webhook_enabled": values.get("webhook_enabled", "false").lower() == "true",
+        "webhook_url": values.get("webhook_url", ""),
+        "webhook_bearer_token": values.get("webhook_bearer_token", ""),
     }
 
 
@@ -455,6 +460,11 @@ def put_settings(
             status_code=400,
             detail="Critical integration count warning threshold must be <= critical threshold",
         )
+    if payload.webhook_enabled and (not payload.webhook_url.strip() or not payload.webhook_bearer_token.strip()):
+        raise HTTPException(
+            status_code=400,
+            detail="Webhook URL and bearer token are required when webhook notifications are enabled",
+        )
 
     saved = settings_repository.upsert_settings(payload)
     settings_repository.log_audit(
@@ -474,6 +484,9 @@ def put_settings(
         "threshold_missed_schedules_critical": int(saved["threshold_missed_schedules_critical"]),
         "threshold_critical_integrations_warning": int(saved["threshold_critical_integrations_warning"]),
         "threshold_critical_integrations_critical": int(saved["threshold_critical_integrations_critical"]),
+        "webhook_enabled": saved["webhook_enabled"].lower() == "true",
+        "webhook_url": saved["webhook_url"],
+        "webhook_bearer_token": saved["webhook_bearer_token"],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 

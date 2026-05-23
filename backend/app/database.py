@@ -98,6 +98,17 @@ def init_database() -> None:
       FOREIGN KEY (email) REFERENCES admin_users(email)
     );
 
+    CREATE TABLE IF NOT EXISTS webhook_delivery_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      status TEXT NOT NULL,
+      attempts INTEGER NOT NULL,
+      http_status INTEGER,
+      error_message TEXT,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       actor_email TEXT,

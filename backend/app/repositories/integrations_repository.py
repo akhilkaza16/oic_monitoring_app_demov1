@@ -366,6 +366,9 @@ class IntegrationsRepository:
             "threshold_missed_schedules_critical": "5",
             "threshold_critical_integrations_warning": "20",
             "threshold_critical_integrations_critical": "35",
+            "webhook_enabled": "false",
+            "webhook_url": "",
+            "webhook_bearer_token": "",
         }
         for key, value in required_settings_defaults.items():
             connection.execute(
