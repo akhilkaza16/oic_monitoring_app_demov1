@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   confirmPasswordReset,
   getAuthStatus,
@@ -14,18 +14,18 @@ export default function SecurityPage() {
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready");
 
-  const loadAuthStatus = async () => {
+  const loadAuthStatus = useCallback(async () => {
     try {
       const auth = await getAuthStatus();
       setAuthEmail(auth.authenticated_email);
     } catch {
       setAuthEmail(null);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadAuthStatus();
-  }, []);
+  }, [loadAuthStatus]);
 
   const onRequestReset = async (event: FormEvent) => {
     event.preventDefault();

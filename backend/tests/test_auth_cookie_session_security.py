@@ -90,7 +90,7 @@ def test_cookie_auth_status_reports_authenticated_email(
     response = api_client.get(f"{BASE_URL}/api/auth/status", timeout=20)
     assert response.status_code == 200
     payload = response.json()
-    assert payload["has_admin"] is True
+    assert payload["has_admin"]
     assert payload["authenticated_email"] == email
 
 

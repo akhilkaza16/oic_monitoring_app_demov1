@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from pathlib import Path
 
 import pytest
@@ -55,6 +56,10 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/") or _load_base
 ADMIN_EMAIL, ADMIN_PASSWORD = _load_test_credentials()
 
 
+def _generate_temp_password() -> str:
+    return f"Tmp!{secrets.token_hex(6)}Aa1"
+
+
 @pytest.fixture()
 def api_client() -> requests.Session:
     # Module: shared HTTP session for cookie + bearer compatibility checks
@@ -104,7 +109,7 @@ def test_password_reset_confirm_updates_password_revokes_sessions_and_blocks_reu
 ) -> None:
     # Feature: reset confirm validates code, changes password, revokes active sessions, and marks code used
     old_password = ADMIN_PASSWORD
-    temp_password = "BadgerTemp456!"
+    temp_password = _generate_temp_password()
 
     first_token = _login_and_get_token(api_client, ADMIN_EMAIL, old_password)
 

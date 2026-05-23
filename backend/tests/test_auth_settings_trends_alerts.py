@@ -112,7 +112,7 @@ def test_auth_status_and_register_bootstrap_behavior(
     before_payload = status_before.json()
     assert before_payload["authenticated_email"] is None
 
-    if before_payload["has_admin"] is False:
+    if not before_payload["has_admin"]:
         register_response = api_client.post(
             f"{BASE_URL}/api/auth/register-admin",
             json={"email": admin_email, "password": admin_password},
@@ -131,7 +131,7 @@ def test_auth_status_and_register_bootstrap_behavior(
         )
         assert status_after.status_code == 200
         after_payload = status_after.json()
-        assert after_payload["has_admin"] is True
+        assert after_payload["has_admin"]
         assert after_payload["authenticated_email"] == admin_email
     else:
         register_reject = api_client.post(
@@ -159,7 +159,7 @@ def test_login_failure_records_audit(
     data = failed_login.json()
     assert "detail" in data
 
-    assert _audit_action_exists(api_client, admin_token, "login_failed") is True
+    assert _audit_action_exists(api_client, admin_token, "login_failed")
 
 
 def test_login_success_records_audit(
@@ -181,7 +181,7 @@ def test_login_success_records_audit(
     assert isinstance(payload["token"], str)
     assert len(payload["token"]) > 20
 
-    assert _audit_action_exists(api_client, payload["token"], "login_success") is True
+    assert _audit_action_exists(api_client, payload["token"], "login_success")
 
 
 def test_settings_endpoints_require_auth(api_client: requests.Session) -> None:
@@ -265,7 +265,7 @@ def test_settings_persist_with_auth_and_log_audit(api_client: requests.Session, 
     assert persisted["polling_seconds"] == update_payload["polling_seconds"]
     assert persisted["notification_email"] == update_payload["notification_email"]
 
-    assert _audit_action_exists(api_client, admin_token, "settings_updated") is True
+    assert _audit_action_exists(api_client, admin_token, "settings_updated")
 
     restore_response = api_client.put(
         f"{BASE_URL}/api/settings",
@@ -288,7 +288,7 @@ def test_manual_collector_trigger_and_audit_entry(api_client: requests.Session, 
     assert isinstance(run_payload["updated_integrations"], int)
     assert run_payload["updated_integrations"] >= 25
 
-    assert _audit_action_exists(api_client, admin_token, "manual_collector_trigger") is True
+    assert _audit_action_exists(api_client, admin_token, "manual_collector_trigger")
 
 
 def test_trends_default_returns_30_day_window(api_client: requests.Session) -> None:
@@ -361,9 +361,9 @@ def test_alert_acknowledge_with_auth_updates_state_and_audit(
     updated_alerts = include_ack_response.json()
     matching = [item for item in updated_alerts if item["id"] == alert_id]
     assert matching, "Acknowledged alert should still be queryable with include_acknowledged=true"
-    assert matching[0]["acknowledged"] is True
+    assert matching[0]["acknowledged"]
 
-    assert _audit_action_exists(api_client, admin_token, "alert_acknowledged") is True
+    assert _audit_action_exists(api_client, admin_token, "alert_acknowledged")
 
 
 def test_audit_logs_endpoint_requires_auth(api_client: requests.Session) -> None:

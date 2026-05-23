@@ -49,7 +49,7 @@ export default function ExecutiveDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [getAlerts, getExecutiveSummary, getLatencyLogs, getTrendSnapshots]);
+  }, []);
 
   useEffect(() => {
     load();

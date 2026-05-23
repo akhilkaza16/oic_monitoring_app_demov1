@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import random
+from secrets import SystemRandom
 from datetime import datetime, timedelta, timezone
 
 PROJECTS = [
@@ -55,14 +55,14 @@ STATUS_WEIGHTS = {
 }
 
 
-def _weighted_status(rng: random.Random) -> str:
+def _weighted_status(rng: SystemRandom) -> str:
     statuses = list(STATUS_WEIGHTS.keys())
     weights = list(STATUS_WEIGHTS.values())
     return rng.choices(statuses, weights=weights, k=1)[0]
 
 
 def build_seed_dataset(total: int = 170) -> tuple[list[dict], list[dict], dict[str, str]]:
-    rng = random.Random(170)
+    rng = SystemRandom()
     now = datetime.now(timezone.utc)
     integrations: list[dict] = []
     run_events: list[dict] = []

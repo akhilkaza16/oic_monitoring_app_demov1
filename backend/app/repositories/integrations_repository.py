@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import random
 from datetime import datetime, timedelta, timezone
+from secrets import SystemRandom
 
 from app.database import get_connection
 from app.models import IntegrationSummary, RunEvent
@@ -284,7 +284,7 @@ class IntegrationsRepository:
 
     def _seed_trend_history(self, connection) -> None:
         healthy, warning, critical, unknown = self._status_counts(connection)
-        rng = random.Random(30)
+        rng = SystemRandom()
         total = healthy + warning + critical + unknown
         today = datetime.now(timezone.utc).date()
 
