@@ -34,7 +34,6 @@ class WebhookAdapter:
             "severity": severity,
             "timestamp": event_time_iso,
             "integration_id": integration_id,
-            "title": alert_title,
         }
         headers = {"Content-Type": "application/json"}
         if webhook_token:

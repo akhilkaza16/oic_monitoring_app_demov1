@@ -24,6 +24,7 @@ Local proof-of-concept dashboard for monitoring **170 mock Oracle Integration Cl
 11. Benchmark script for key read endpoints with latency report output
 12. Settings page for future OIC connector configuration (kept abstract)
 13. Dedicated Security page with one-time password reset codes and server-side session revocation controls
+14. Webhook notification adapter (warning/critical alert events) with retry and bearer-token auth
 
 ## Project Structure
 
