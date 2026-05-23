@@ -101,6 +101,22 @@ class AuthResponse(BaseModel):
     email: str
 
 
+class PasswordResetRequestPayload(BaseModel):
+    email: str
+
+
+class PasswordResetRequestResponse(BaseModel):
+    status: str
+    reset_code: str
+    expires_in_minutes: int
+
+
+class PasswordResetConfirmPayload(BaseModel):
+    email: str
+    reset_code: str
+    new_password: str = Field(..., min_length=10, max_length=128)
+
+
 class AuditLogEntry(BaseModel):
     id: int
     actor_email: str | None

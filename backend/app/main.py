@@ -19,20 +19,31 @@ from app.models import (
     IntegrationDetailResponse,
     IntegrationListResponse,
     LatencyLog,
+    PasswordResetConfirmPayload,
+    PasswordResetRequestPayload,
+    PasswordResetRequestResponse,
     SettingsPayload,
     TrendSnapshot,
 )
+from app.repositories.alerts_repository import AlertsRepository
 from app.repositories.auth_repository import AuthRepository
+from app.repositories.collector_repository import CollectorRepository
+from app.repositories.integrations_repository import IntegrationsRepository
+from app.repositories.latency_repository import LatencyRepository
 from app.repositories.settings_repository import SettingsRepository
+from app.repositories.trends_repository import TrendsRepository
 from app.repository import OICRepository
-from app.services.auth_service import create_token, validate_token
-from app.services.oic_interface import MockOICCollector, OICCollectorInterface
+from app.services.auth_service import create_token, validate_token_data
 from app.services.rules_engine import build_recommendations
 
 repository = OICRepository()
 auth_repository = AuthRepository()
 settings_repository = SettingsRepository()
-collector: OICCollectorInterface = MockOICCollector(repository)
+integrations_repository = IntegrationsRepository(repository)
+alerts_repository = AlertsRepository(repository)
+trends_repository = TrendsRepository(repository)
+latency_repository = LatencyRepository(repository)
+collector_repository = CollectorRepository(repository)
 
 SESSION_COOKIE_NAME = "session_token"
 CSRF_COOKIE_NAME = "csrf_token"
@@ -41,7 +52,7 @@ CSRF_COOKIE_NAME = "csrf_token"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_database()
-    repository.seed_if_empty(total=170)
+    integrations_repository.seed_if_empty(total=170)
     yield
 
 
@@ -68,7 +79,7 @@ async def api_latency_middleware(request: Request, call_next):
     response.headers["X-Latency-Ms"] = f"{latency_ms:.2f}"
 
     if request.url.path.startswith("/api/"):
-        repository.log_latency(
+        latency_repository.log_latency(
             endpoint=request.url.path,
             method=request.method,
             latency_ms=latency_ms,
@@ -123,7 +134,12 @@ def _optional_actor_email(request: Request, authorization: str | None) -> str | 
     if not token:
         return None
     try:
-        return validate_token(token)
+        payload = validate_token_data(token)
+        email = str(payload["sub"])
+        session_id = str(payload.get("sid", ""))
+        if session_id and not auth_repository.is_session_active(email=email, session_id=session_id):
+            return None
+        return email
     except ValueError:
         return None
 
@@ -144,7 +160,12 @@ def _require_actor_email(
             raise HTTPException(status_code=403, detail="CSRF validation failed")
 
     try:
-        return validate_token(token)
+        payload = validate_token_data(token)
+        email = str(payload["sub"])
+        session_id = str(payload.get("sid", ""))
+        if session_id and not auth_repository.is_session_active(email=email, session_id=session_id):
+            raise HTTPException(status_code=401, detail="Session revoked or expired")
+        return email
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
@@ -177,7 +198,8 @@ def register_admin(payload: AuthPayload, response: Response) -> AuthResponse:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    token = create_token(created_email)
+    session_id, _ = auth_repository.create_session(email=created_email, revoke_previous=True)
+    token = create_token(created_email, session_id)
     _set_auth_cookies(response, token)
 
     settings_repository.log_audit(
@@ -204,7 +226,8 @@ def login_admin(payload: AuthPayload, response: Response) -> AuthResponse:
         status_code = 423 if "locked" in reason.lower() else 401
         raise HTTPException(status_code=status_code, detail=reason)
 
-    token = create_token(email)
+    session_id, _ = auth_repository.create_session(email=email, revoke_previous=True)
+    token = create_token(email, session_id)
     _set_auth_cookies(response, token)
     return AuthResponse(token=token, email=email)
 
@@ -213,6 +236,7 @@ def login_admin(payload: AuthPayload, response: Response) -> AuthResponse:
 def logout_admin(request: Request, response: Response, authorization: str | None = Header(default=None)) -> dict[str, str]:
     actor = _optional_actor_email(request, authorization)
     if actor:
+        auth_repository.revoke_all_sessions(email=actor, reason="logout")
         settings_repository.log_audit(
             actor_email=actor,
             action_type="logout",
@@ -223,15 +247,74 @@ def logout_admin(request: Request, response: Response, authorization: str | None
     return {"status": "logged_out"}
 
 
+@app.post("/api/auth/password-reset/request", response_model=PasswordResetRequestResponse)
+def request_password_reset(payload: PasswordResetRequestPayload) -> PasswordResetRequestResponse:
+    try:
+        reset_code = auth_repository.create_password_reset_code(email=payload.email, expiry_minutes=60)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    settings_repository.log_audit(
+        actor_email=payload.email.lower().strip(),
+        action_type="password_reset_requested",
+        target="admin_users",
+        details="One-time reset code generated",
+    )
+    return PasswordResetRequestResponse(status="code_generated", reset_code=reset_code, expires_in_minutes=60)
+
+
+@app.post("/api/auth/password-reset/confirm")
+def confirm_password_reset(payload: PasswordResetConfirmPayload) -> dict[str, str]:
+    success, message = auth_repository.reset_password_with_code(
+        email=payload.email,
+        reset_code=payload.reset_code,
+        new_password=payload.new_password,
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    settings_repository.log_audit(
+        actor_email=payload.email.lower().strip(),
+        action_type="password_reset_completed",
+        target="admin_users",
+        details="Password reset completed and sessions revoked",
+    )
+    return {"status": "password_reset_completed"}
+
+
+@app.post("/api/security/revoke-sessions")
+def revoke_sessions(
+    request: Request,
+    response: Response,
+    authorization: str | None = Header(default=None),
+    x_csrf_token: str | None = Header(default=None),
+) -> dict[str, int]:
+    actor = _require_actor_email(
+        request,
+        authorization,
+        csrf_header=x_csrf_token,
+        enforce_csrf=True,
+    )
+    revoked = auth_repository.revoke_all_sessions(email=actor, reason="manual_revoke_all")
+    _clear_auth_cookies(response)
+    settings_repository.log_audit(
+        actor_email=actor,
+        action_type="sessions_revoked",
+        target="admin_sessions",
+        details=f"Revoked {revoked} active sessions",
+    )
+    return {"revoked_sessions": revoked}
+
+
 @app.get("/api/executive-summary", response_model=ExecutiveSummaryResponse)
 def executive_summary() -> ExecutiveSummaryResponse:
-    summary = repository.get_executive_summary()
+    summary = integrations_repository.get_executive_summary()
     return ExecutiveSummaryResponse(**summary)
 
 
 @app.get("/api/trends", response_model=list[TrendSnapshot])
 def trend_snapshots(days: int = Query(default=30, ge=7, le=90)) -> list[TrendSnapshot]:
-    rows = repository.get_trend_snapshots(days=days)
+    rows = trends_repository.get_trend_snapshots(days=days)
     return [TrendSnapshot(**row) for row in rows]
 
 
@@ -240,7 +323,7 @@ def alerts(
     limit: int = Query(default=20, ge=1, le=200),
     include_acknowledged: bool = Query(default=False),
 ) -> list[AlertEvent]:
-    rows = repository.get_alerts(limit=limit, include_acknowledged=include_acknowledged)
+    rows = alerts_repository.get_alerts(limit=limit, include_acknowledged=include_acknowledged)
     return [AlertEvent(**row) for row in rows]
 
 
@@ -257,7 +340,7 @@ def acknowledge_alert(
         csrf_header=x_csrf_token,
         enforce_csrf=True,
     )
-    updated = repository.acknowledge_alert(alert_id)
+    updated = alerts_repository.acknowledge_alert(alert_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Alert not found")
     settings_repository.log_audit(
@@ -278,7 +361,7 @@ def list_integrations(
     limit: int = Query(default=40, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> IntegrationListResponse:
-    total, items = repository.list_integrations(
+    total, items = integrations_repository.list_integrations(
         status=status,
         project=project,
         business_domain=business_domain,
@@ -291,12 +374,12 @@ def list_integrations(
 
 @app.get("/api/filter-options")
 def filter_options() -> dict[str, list[str]]:
-    return repository.get_filter_options()
+    return integrations_repository.get_filter_options()
 
 
 @app.get("/api/integrations/{integration_id}", response_model=IntegrationDetailResponse)
 def integration_detail(integration_id: str) -> IntegrationDetailResponse:
-    detail = repository.get_integration_detail(integration_id)
+    detail = integrations_repository.get_integration_detail(integration_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Integration not found")
 
@@ -322,7 +405,7 @@ def latency_logs(
     endpoint: str | None = Query(default=None),
     limit: int = Query(default=40, ge=1, le=200),
 ) -> list[LatencyLog]:
-    rows = repository.get_latency_logs(endpoint=endpoint, limit=limit)
+    rows = latency_repository.get_latency_logs(endpoint=endpoint, limit=limit)
     return [LatencyLog(**row) for row in rows]
 
 
@@ -420,7 +503,7 @@ def run_mock_collector(
         csrf_header=x_csrf_token,
         enforce_csrf=True,
     )
-    updated = collector.collect_cycle()
+    updated = collector_repository.collect_mock_cycle()
     settings_repository.log_audit(
         actor_email=actor,
         action_type="manual_collector_trigger",

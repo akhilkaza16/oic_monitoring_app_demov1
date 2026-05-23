@@ -489,6 +489,16 @@ button:disabled {
   margin-bottom: 0.2rem;
 }
 
+.security-reset-code {
+  margin: 0.6rem 0 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.45rem;
+  border: 1px dashed #86bdb3;
+  background: #eef9f6;
+  color: #0f3f39;
+  font-size: 0.95rem;
+}
+
 @media (max-width: 1100px) {
   .trend-bars {
     grid-template-columns: repeat(6, minmax(0, 1fr));

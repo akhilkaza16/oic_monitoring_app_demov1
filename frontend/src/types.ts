@@ -97,6 +97,26 @@ export interface AuthResponse {
   email: string;
 }
 
+export interface PasswordResetRequestPayload {
+  email: string;
+}
+
+export interface PasswordResetRequestResponse {
+  status: string;
+  reset_code: string;
+  expires_in_minutes: number;
+}
+
+export interface PasswordResetConfirmPayload {
+  email: string;
+  reset_code: string;
+  new_password: string;
+}
+
+export interface SessionRevokeResponse {
+  revoked_sessions: number;
+}
+
 export interface AuditLogEntry {
   id: number;
   actor_email: string | null;

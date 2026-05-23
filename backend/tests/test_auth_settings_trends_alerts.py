@@ -181,7 +181,7 @@ def test_login_success_records_audit(
     assert isinstance(payload["token"], str)
     assert len(payload["token"]) > 20
 
-    assert _audit_action_exists(api_client, admin_token, "login_success") is True
+    assert _audit_action_exists(api_client, payload["token"], "login_success") is True
 
 
 def test_settings_endpoints_require_auth(api_client: requests.Session) -> None:

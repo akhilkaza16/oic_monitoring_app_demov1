@@ -9,7 +9,11 @@ import {
   IntegrationDetailResponse,
   IntegrationListResponse,
   LatencyLog,
+  PasswordResetConfirmPayload,
+  PasswordResetRequestPayload,
+  PasswordResetRequestResponse,
   SettingsPayload,
+  SessionRevokeResponse,
   TrendSnapshot,
 } from "./types";
 
@@ -133,6 +137,28 @@ export function loginAdmin(payload: AuthPayload): Promise<AuthResponse> {
 
 export function logoutAdmin(): Promise<{ status: string }> {
   return request<{ status: string }>("/api/auth/logout", {
+    method: "POST",
+  });
+}
+
+export function requestPasswordReset(
+  payload: PasswordResetRequestPayload
+): Promise<PasswordResetRequestResponse> {
+  return request<PasswordResetRequestResponse>("/api/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function confirmPasswordReset(payload: PasswordResetConfirmPayload): Promise<{ status: string }> {
+  return request<{ status: string }>("/api/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function revokeAllSessions(): Promise<SessionRevokeResponse> {
+  return request<SessionRevokeResponse>("/api/security/revoke-sessions", {
     method: "POST",
   });
 }

@@ -78,6 +78,26 @@ def init_database() -> None:
       FOREIGN KEY (email) REFERENCES admin_users(email)
     );
 
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+      session_id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      issued_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      revoked_at TEXT,
+      revoke_reason TEXT,
+      FOREIGN KEY (email) REFERENCES admin_users(email)
+    );
+
+    CREATE TABLE IF NOT EXISTS password_reset_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (email) REFERENCES admin_users(email)
+    );
+
     CREATE TABLE IF NOT EXISTS audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       actor_email TEXT,
