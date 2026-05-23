@@ -45,6 +45,12 @@ export default function SettingsPage() {
       setHasAdmin(response.has_admin);
       setAuthenticatedEmail(response.authenticated_email);
 
+      if (!response.has_admin) {
+        setStatus("Create your first admin account to unlock settings");
+      } else if (!response.authenticated_email) {
+        setStatus("Please sign in to access settings");
+      }
+
       if (!response.authenticated_email && (tokenValue ?? authToken)) {
         clearStoredAdminToken();
         setAuthToken(null);
@@ -110,7 +116,7 @@ export default function SettingsPage() {
     setAuthToken(null);
     setAuthenticatedEmail(null);
     setAuditLogs([]);
-    setStatus("Signed out");
+    setStatus("Signed out. Please sign in to continue");
     await loadAuthStatus(null);
   };
 

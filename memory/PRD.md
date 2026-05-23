@@ -18,6 +18,7 @@ User-selected scope:
 - Deterministic recommendation rules engine returns top 3 actions from simulated error signals.
 - Middleware logs API latency for monitored endpoints into SQLite for UI + benchmark visibility.
 - Settings security uses local admin auth with signed Bearer token, first-run admin bootstrap, and protected settings/audit endpoints.
+- Alerting now reads configurable warning/critical thresholds from Settings and applies them to both alert generation and alert feed visibility.
 
 ## What Has Been Implemented
 - Seed generation and load of 170 integrations across projects/domains with simulated health states.
@@ -30,6 +31,8 @@ User-selected scope:
 - Audit logging implemented for login attempts, settings updates, and manual collector triggers; UI audit table added.
 - Historical trend snapshots (30-day default) via `/api/trends` and dashboard trend panel.
 - In-app alert feed with simulated email log fields via `/api/alerts` and acknowledge action endpoint.
+- Configurable threshold controls in Settings for issue score, missed schedules, and critical integration count (warning + critical levels).
+- Threshold-aware backend alert behavior: collector-generated alerts and dashboard feed filtering both respect saved thresholds.
 - API latency logs endpoint + visual latency panels on dashboard/detail.
 - Manual mock collector trigger endpoint and standalone worker script (`backend/mock_collector.py`).
 - Benchmark script (`scripts/benchmark.py`) covering summary/list/detail plus backend latency log output.
@@ -42,7 +45,7 @@ User-selected scope:
 3. Add CI workflow for pytest + frontend build + lint checks on every change.
 
 ### P1 (Should Have)
-1. Add configurable alert thresholds and mute windows from Settings.
+1. Add alert mute windows and quiet-hours schedules from Settings.
 2. Add CSV export for filtered integration table and incident snapshots.
 3. Add per-project trend overlays and incident drilldowns.
 
@@ -52,6 +55,6 @@ User-selected scope:
 3. Add side-by-side comparison of current vs previous collector cycle deltas.
 
 ## Next Tasks
-1. Add alert threshold controls to Settings and persist threshold values in SQLite.
-2. Add optional webhook adapter (while keeping current simulated email logging for local mode).
-3. Add security hardening for auth (password reset flow + forced password policy checks).
+1. Add optional webhook adapter (while keeping current email-log mode for local operation).
+2. Add alert mute windows/quiet hours and per-rule enable/disable toggles.
+3. Add security hardening for auth (password reset flow + stronger password policy enforcement).

@@ -126,4 +126,6 @@ export interface AlertEvent {
   simulated_email_to: string;
   created_at: string;
   acknowledged: boolean;
+  metric_type?: string | null;
+  metric_value?: number | null;
 }
