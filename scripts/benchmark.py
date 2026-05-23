@@ -1,11 +1,29 @@
 from __future__ import annotations
 
 import argparse
+import os
 import statistics
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import requests
+
+
+def _load_backend_url_from_env() -> str:
+    direct = os.environ.get("REACT_APP_BACKEND_URL", "").strip()
+    if direct:
+        return direct.rstrip("/")
+
+    env_path = Path("/app/frontend/.env")
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            if line.startswith("REACT_APP_BACKEND_URL="):
+                value = line.split("=", 1)[1].strip()
+                if value:
+                    return value.rstrip("/")
+
+    raise RuntimeError("REACT_APP_BACKEND_URL is required (env variable or /app/frontend/.env)")
 
 
 @dataclass
@@ -38,22 +56,25 @@ def measure(base_url: str, endpoint: str, runs: int) -> BenchResult:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark badger-oic-monitor read endpoints")
-    parser.add_argument("--base-url", default="http://localhost:8001/api")
+    parser.add_argument("--base-url", default="")
     parser.add_argument("--runs", type=int, default=10)
     args = parser.parse_args()
 
-    print(f"Benchmarking {args.base_url} with {args.runs} runs per endpoint")
+    resolved_base = args.base_url.strip() or f"{_load_backend_url_from_env()}/api"
+    base_url = resolved_base.rstrip("/")
 
-    summary = measure(args.base_url, "/executive-summary", args.runs)
-    integrations = measure(args.base_url, "/integrations?limit=40&offset=0", args.runs)
+    print(f"Benchmarking {base_url} with {args.runs} runs per endpoint")
 
-    list_response = requests.get(f"{args.base_url}/integrations?limit=1&offset=0", timeout=10)
+    summary = measure(base_url, "/executive-summary", args.runs)
+    integrations = measure(base_url, "/integrations?limit=40&offset=0", args.runs)
+
+    list_response = requests.get(f"{base_url}/integrations?limit=1&offset=0", timeout=10)
     list_response.raise_for_status()
     first_item = list_response.json()["items"][0]
-    detail = measure(args.base_url, f"/integrations/{first_item['integration_id']}", args.runs)
+    detail = measure(base_url, f"/integrations/{first_item['integration_id']}", args.runs)
 
     latency_logs = requests.get(
-        f"{args.base_url}/latency-logs?limit=5",
+        f"{base_url}/latency-logs?limit=5",
         timeout=10,
     )
     latency_logs.raise_for_status()
