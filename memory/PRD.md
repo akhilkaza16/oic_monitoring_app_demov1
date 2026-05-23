@@ -12,11 +12,12 @@ User-selected scope:
 
 ## Architecture Decisions
 - Frontend built with React Router and TypeScript on Vite for multi-page dashboard navigation.
-- Backend implemented with FastAPI and lifecycle-based startup (`lifespan`) to initialize and seed SQLite.
-- SQLite tables: `integrations`, `run_events`, `latency_logs`, `settings`.
+- Backend implemented with FastAPI and lifecycle-based startup (`lifespan`) to initialize/seed SQLite and backfill trends/alerts if needed.
+- SQLite tables: `integrations`, `run_events`, `latency_logs`, `settings`, `admin_users`, `audit_logs`, `trend_snapshots`, `alert_events`.
 - OIC data access abstracted via `OICCollectorInterface`; current implementation uses `MockOICCollector`.
 - Deterministic recommendation rules engine returns top 3 actions from simulated error signals.
 - Middleware logs API latency for monitored endpoints into SQLite for UI + benchmark visibility.
+- Settings security uses local admin auth with signed Bearer token, first-run admin bootstrap, and protected settings/audit endpoints.
 
 ## What Has Been Implemented
 - Seed generation and load of 170 integrations across projects/domains with simulated health states.
@@ -24,22 +25,26 @@ User-selected scope:
 - Executive summary API and dashboard with health score, status counts, critical incidents, top failures.
 - Integration list API/page with pagination and filters (status, project, domain, search).
 - Integration detail API/page with metadata, run history, status panel, and top-3 recommendations.
-- Settings API/page for future OIC configuration persistence (abstracted, no real OIC connection).
+- Settings authentication flow: first-run create-admin page, login page, protected settings panel, sign-out support.
+- Protected settings APIs (`GET/PUT /api/settings`) and auth APIs (`/api/auth/status`, `/api/auth/register-admin`, `/api/auth/login`).
+- Audit logging implemented for login attempts, settings updates, and manual collector triggers; UI audit table added.
+- Historical trend snapshots (30-day default) via `/api/trends` and dashboard trend panel.
+- In-app alert feed with simulated email log fields via `/api/alerts` and acknowledge action endpoint.
 - API latency logs endpoint + visual latency panels on dashboard/detail.
 - Manual mock collector trigger endpoint and standalone worker script (`backend/mock_collector.py`).
 - Benchmark script (`scripts/benchmark.py`) covering summary/list/detail plus backend latency log output.
-- Documentation: setup/testing README and architecture notes (`docs/ARCHITECTURE.md`).
+- Documentation updated: README + architecture notes (`docs/ARCHITECTURE.md`).
 
 ## Prioritized Backlog
 ### P0 (Must Have Next)
-1. Add authentication/role boundaries for settings changes (admin-only write).
-2. Add backend validation and guardrails for malformed settings payloads (email/domain constraints).
-3. Add CI test workflow to run backend API tests and frontend build checks automatically.
+1. Rotate admin token secret for production-like local environments and add token revocation/expiry refresh controls.
+2. Add stricter validation for settings payloads (email domain allowlist, URL format policy, auth mode constraints).
+3. Add CI workflow for pytest + frontend build + lint checks on every change.
 
 ### P1 (Should Have)
-1. Add trend charts for status drift over time (hourly/daily aggregation from run history).
-2. Add alert rules configuration (threshold-based warning/critical notifications).
-3. Add CSV export for filtered integration table and incident snapshots.
+1. Add configurable alert thresholds and mute windows from Settings.
+2. Add CSV export for filtered integration table and incident snapshots.
+3. Add per-project trend overlays and incident drilldowns.
 
 ### P2 (Nice to Have)
 1. Add theme density controls for executive vs operations viewing modes.
@@ -47,6 +52,6 @@ User-selected scope:
 3. Add side-by-side comparison of current vs previous collector cycle deltas.
 
 ## Next Tasks
-1. Introduce auth + audit log for settings updates.
-2. Implement historical trend endpoints for charting health trajectory.
-3. Add optional notification adapter interfaces (email/webhook) while retaining local-only defaults.
+1. Add alert threshold controls to Settings and persist threshold values in SQLite.
+2. Add optional webhook adapter (while keeping current simulated email logging for local mode).
+3. Add security hardening for auth (password reset flow + forced password policy checks).

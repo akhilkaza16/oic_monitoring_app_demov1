@@ -29,7 +29,7 @@ export default function SettingsPage() {
   const [loginPassword, setLoginPassword] = useState("");
   const [form, setForm] = useState<SettingsPayload>(DEFAULT_FORM);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
-  const [status, setStatus] = useState<string>("Loading...");
+  const [status, setStatus] = useState<string>("Awaiting action");
   const [isSaving, setIsSaving] = useState(false);
   const [loadingAuthState, setLoadingAuthState] = useState(true);
 
