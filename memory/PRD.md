@@ -25,6 +25,8 @@ User-selected scope:
 - Repository domain split expanded to dedicated alerts/integrations/trends/latency/collector repository layers.
 - Legacy `repository.py` converted into a lightweight compatibility shim delegating to domain repositories.
 - Webhook notification adapter added with configurable URL/token, warning+critical alert triggers, and retry/backoff delivery behavior.
+- Webhook monitoring added via dedicated Notifications page (summary counters, status filters, delivery table, 30s auto-refresh).
+- Retry policy controls added to Settings (max retries, initial backoff, timeout) with conservative guardrails.
 
 ## What Has Been Implemented
 - Seed generation and load of 170 integrations across projects/domains with simulated health states.
@@ -48,6 +50,7 @@ User-selected scope:
 - Added dedicated Security page for reset-code request/confirm and revoke-all sessions control.
 - Completed deconstruction of monolith repository runtime path by routing backend logic through domain repositories.
 - Added webhook adapter configuration in Settings (enable toggle, URL, bearer token) and minimal alert payload delivery contract.
+- Added webhook delivery logs API and UI monitoring surface for operational visibility.
 - API latency logs endpoint + visual latency panels on dashboard/detail.
 - Manual mock collector trigger endpoint and standalone worker script (`backend/mock_collector.py`).
 - Benchmark script (`scripts/benchmark.py`) covering summary/list/detail plus backend latency log output.
@@ -72,4 +75,4 @@ User-selected scope:
 ## Next Tasks
 1. Add stronger account recovery safeguards (reset attempt throttling + verification challenge).
 2. Add session visibility API (list active sessions with issued/expiry metadata).
-3. Add webhook delivery dashboard (recent attempts, failures, retry diagnostics).
+3. Add notification history retention policies (pruning + archival controls).

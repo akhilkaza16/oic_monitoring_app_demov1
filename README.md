@@ -25,6 +25,8 @@ Local proof-of-concept dashboard for monitoring **170 mock Oracle Integration Cl
 12. Settings page for future OIC connector configuration (kept abstract)
 13. Dedicated Security page with one-time password reset codes and server-side session revocation controls
 14. Webhook notification adapter (warning/critical alert events) with retry and bearer-token auth
+15. Notifications page for webhook delivery monitoring (summary, status filters, delivery logs, auto-refresh)
+16. Configurable webhook retry policy controls in Settings (max retries, initial backoff, timeout)
 
 ## Project Structure
 

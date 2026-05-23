@@ -41,6 +41,7 @@ export default function SettingsPage() {
   const [status, setStatus] = useState<string>("Awaiting action");
   const [isSaving, setIsSaving] = useState(false);
   const [loadingAuthState, setLoadingAuthState] = useState(true);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
 
   const loadAuthStatus = useCallback(
     async () => {
@@ -73,6 +74,8 @@ export default function SettingsPage() {
       return;
     }
 
+    setIsLoadingSettings(true);
+
     Promise.all([getSettings(), getAuditLogs(80)])
       .then(([settingsPayload, logsPayload]) => {
         setForm(settingsPayload);
@@ -81,6 +84,9 @@ export default function SettingsPage() {
       })
       .catch((error) => {
         setStatus(error instanceof Error ? error.message : "Could not load secure settings data");
+      })
+      .finally(() => {
+        setIsLoadingSettings(false);
       });
   }, [authenticatedEmail, getAuditLogs, getSettings]);
 
@@ -120,6 +126,10 @@ export default function SettingsPage() {
     event.preventDefault();
     if (!authenticatedEmail) {
       setStatus("Sign in required");
+      return;
+    }
+    if (isLoadingSettings) {
+      setStatus("Please wait for settings to finish loading before saving");
       return;
     }
     if (form.threshold_issue_score_warning > form.threshold_issue_score_critical) {
@@ -531,7 +541,7 @@ export default function SettingsPage() {
           <button
             type="submit"
             className="button-primary"
-            disabled={isSaving}
+            disabled={isSaving || isLoadingSettings}
             data-testid="settings-save-button"
           >
             {isSaving ? "Saving" : "Save Settings"}
