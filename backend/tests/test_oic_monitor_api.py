@@ -202,7 +202,26 @@ def test_settings_get_and_put_persist(api_client: requests.Session) -> None:
 
 def test_mock_collector_run_updates_integrations(api_client: requests.Session) -> None:
     # Feature: mock collector run endpoint updates integrations deterministically
-    response = api_client.post(f"{BASE_URL}/api/mock-collector/run", timeout=30)
+    admin_email, admin_password = _get_admin_credentials()
+
+    login_resp = api_client.post(
+        f"{BASE_URL}/api/auth/login",
+        json={"email": admin_email, "password": admin_password},
+        timeout=20,
+    )
+    assert login_resp.status_code == 200
+
+    csrf_cookie = None
+    for cookie in api_client.cookies:
+        if cookie.name == "csrf_token":
+            csrf_cookie = cookie.value
+    assert csrf_cookie
+
+    response = api_client.post(
+        f"{BASE_URL}/api/mock-collector/run",
+        headers={"X-CSRF-Token": csrf_cookie},
+        timeout=30,
+    )
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data["updated_integrations"], int)

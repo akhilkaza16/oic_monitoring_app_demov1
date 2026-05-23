@@ -90,6 +90,13 @@ curl -s http://localhost:8001/api/auth/status
 1. Open the **Settings** page in the frontend.
 2. If no admin exists, create the first local admin account.
 3. Use those credentials for future login to protected settings and audit logs.
+4. Auth now uses httpOnly session cookies + CSRF header protection for state-changing requests.
+
+## Running Authenticated Backend Tests
+
+```bash
+TEST_ADMIN_EMAIL=admin@badger.local TEST_ADMIN_PASSWORD='YourStrongPassword!' pytest /app/backend/tests -q
+```
 
 ## Run Benchmark
 

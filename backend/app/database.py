@@ -70,6 +70,14 @@ def init_database() -> None:
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS admin_login_security (
+      email TEXT PRIMARY KEY,
+      failed_count INTEGER NOT NULL DEFAULT 0,
+      locked_until TEXT,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (email) REFERENCES admin_users(email)
+    );
+
     CREATE TABLE IF NOT EXISTS audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       actor_email TEXT,

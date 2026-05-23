@@ -39,6 +39,8 @@ export default function IntegrationDetailPage() {
     try {
       await runMockCollectorCycle();
       await load();
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Could not run collector cycle");
     } finally {
       setRunningCollector(false);
     }

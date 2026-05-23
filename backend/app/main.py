@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import secrets
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_database
@@ -21,13 +22,20 @@ from app.models import (
     SettingsPayload,
     TrendSnapshot,
 )
+from app.repositories.auth_repository import AuthRepository
+from app.repositories.settings_repository import SettingsRepository
 from app.repository import OICRepository
 from app.services.auth_service import create_token, validate_token
 from app.services.oic_interface import MockOICCollector, OICCollectorInterface
 from app.services.rules_engine import build_recommendations
 
 repository = OICRepository()
+auth_repository = AuthRepository()
+settings_repository = SettingsRepository()
 collector: OICCollectorInterface = MockOICCollector(repository)
+
+SESSION_COOKIE_NAME = "session_token"
+CSRF_COOKIE_NAME = "csrf_token"
 
 
 @asynccontextmanager
@@ -41,7 +49,11 @@ app = FastAPI(title="badger-oic-monitor", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_origin_regex=r"https://.*\.preview\.emergentagent\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -73,8 +85,41 @@ def _read_bearer_token(authorization: str | None) -> str | None:
     return authorization.replace("Bearer ", "", 1).strip()
 
 
-def _optional_actor_email(authorization: str | None) -> str | None:
-    token = _read_bearer_token(authorization)
+def _resolve_auth_token(request: Request, authorization: str | None) -> tuple[str | None, bool]:
+    bearer_token = _read_bearer_token(authorization)
+    if bearer_token:
+        return bearer_token, True
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
+    return cookie_token, False
+
+
+def _set_auth_cookies(response: Response, token: str) -> None:
+    csrf_token = secrets.token_urlsafe(24)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=False,
+        samesite="strict",
+        path="/",
+    )
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=csrf_token,
+        httponly=False,
+        secure=False,
+        samesite="strict",
+        path="/",
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    response.delete_cookie(CSRF_COOKIE_NAME, path="/")
+
+
+def _optional_actor_email(request: Request, authorization: str | None) -> str | None:
+    token, _ = _resolve_auth_token(request, authorization)
     if not token:
         return None
     try:
@@ -83,10 +128,21 @@ def _optional_actor_email(authorization: str | None) -> str | None:
         return None
 
 
-def _require_actor_email(authorization: str | None) -> str:
-    token = _read_bearer_token(authorization)
+def _require_actor_email(
+    request: Request,
+    authorization: str | None,
+    csrf_header: str | None = None,
+    enforce_csrf: bool = False,
+) -> str:
+    token, using_bearer = _resolve_auth_token(request, authorization)
     if not token:
         raise HTTPException(status_code=401, detail="Authorization token required")
+
+    if enforce_csrf and not using_bearer:
+        csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
+        if not csrf_cookie or not csrf_header or csrf_header != csrf_cookie:
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
     try:
         return validate_token(token)
     except ValueError as exc:
@@ -99,16 +155,16 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/auth/status", response_model=AuthStatusResponse)
-def auth_status(authorization: str | None = Header(default=None)) -> AuthStatusResponse:
-    actor = _optional_actor_email(authorization)
-    return AuthStatusResponse(has_admin=repository.has_admin_user(), authenticated_email=actor)
+def auth_status(request: Request, authorization: str | None = Header(default=None)) -> AuthStatusResponse:
+    actor = _optional_actor_email(request, authorization)
+    return AuthStatusResponse(has_admin=auth_repository.has_admin_user(), authenticated_email=actor)
 
 
 @app.post("/api/auth/register-admin", response_model=AuthResponse)
-def register_admin(payload: AuthPayload) -> AuthResponse:
+def register_admin(payload: AuthPayload, response: Response) -> AuthResponse:
     email = payload.email.lower().strip()
-    if repository.has_admin_user():
-        repository.log_audit(
+    if auth_repository.has_admin_user():
+        settings_repository.log_audit(
             actor_email=email,
             action_type="admin_register_rejected",
             target="admin_users",
@@ -117,34 +173,54 @@ def register_admin(payload: AuthPayload) -> AuthResponse:
         raise HTTPException(status_code=409, detail="Admin is already configured")
 
     try:
-        created_email = repository.create_first_admin(email=email, password=payload.password)
+        created_email = auth_repository.create_first_admin(email=email, password=payload.password)
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    repository.log_audit(
+    token = create_token(created_email)
+    _set_auth_cookies(response, token)
+
+    settings_repository.log_audit(
         actor_email=created_email,
         action_type="admin_registered",
         target="admin_users",
         details="First admin account created from settings page",
     )
-    return AuthResponse(token=create_token(created_email), email=created_email)
+    return AuthResponse(token=token, email=created_email)
 
 
 @app.post("/api/auth/login", response_model=AuthResponse)
-def login_admin(payload: AuthPayload) -> AuthResponse:
-    is_valid = repository.verify_admin_credentials(email=payload.email, password=payload.password)
+def login_admin(payload: AuthPayload, response: Response) -> AuthResponse:
+    is_valid, reason = auth_repository.verify_admin_credentials(email=payload.email, password=payload.password)
     email = payload.email.lower().strip()
 
-    repository.log_audit(
+    settings_repository.log_audit(
         actor_email=email,
         action_type="login_success" if is_valid else "login_failed",
         target="admin_users",
-        details="Admin login attempt",
+        details=reason,
     )
     if not is_valid:
-        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+        status_code = 423 if "locked" in reason.lower() else 401
+        raise HTTPException(status_code=status_code, detail=reason)
 
-    return AuthResponse(token=create_token(email), email=email)
+    token = create_token(email)
+    _set_auth_cookies(response, token)
+    return AuthResponse(token=token, email=email)
+
+
+@app.post("/api/auth/logout")
+def logout_admin(request: Request, response: Response, authorization: str | None = Header(default=None)) -> dict[str, str]:
+    actor = _optional_actor_email(request, authorization)
+    if actor:
+        settings_repository.log_audit(
+            actor_email=actor,
+            action_type="logout",
+            target="admin_users",
+            details="Admin logout request",
+        )
+    _clear_auth_cookies(response)
+    return {"status": "logged_out"}
 
 
 @app.get("/api/executive-summary", response_model=ExecutiveSummaryResponse)
@@ -169,12 +245,22 @@ def alerts(
 
 
 @app.post("/api/alerts/{alert_id}/acknowledge")
-def acknowledge_alert(alert_id: int, authorization: str | None = Header(default=None)) -> dict[str, str]:
-    actor = _require_actor_email(authorization)
+def acknowledge_alert(
+    alert_id: int,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    x_csrf_token: str | None = Header(default=None),
+) -> dict[str, str]:
+    actor = _require_actor_email(
+        request,
+        authorization,
+        csrf_header=x_csrf_token,
+        enforce_csrf=True,
+    )
     updated = repository.acknowledge_alert(alert_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Alert not found")
-    repository.log_audit(
+    settings_repository.log_audit(
         actor_email=actor,
         action_type="alert_acknowledged",
         target=f"alerts/{alert_id}",
@@ -241,9 +327,9 @@ def latency_logs(
 
 
 @app.get("/api/settings")
-def get_settings(authorization: str | None = Header(default=None)) -> dict[str, str | int]:
-    _require_actor_email(authorization)
-    values = repository.get_settings()
+def get_settings(request: Request, authorization: str | None = Header(default=None)) -> dict[str, str | int]:
+    _require_actor_email(request, authorization)
+    values = settings_repository.get_settings()
     return {
         "oic_base_url": values.get("oic_base_url", ""),
         "auth_mode": values.get("auth_mode", "OAuth2"),
@@ -263,8 +349,18 @@ def get_settings(authorization: str | None = Header(default=None)) -> dict[str, 
 
 
 @app.put("/api/settings")
-def put_settings(payload: SettingsPayload, authorization: str | None = Header(default=None)) -> dict[str, str | int]:
-    actor = _require_actor_email(authorization)
+def put_settings(
+    payload: SettingsPayload,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    x_csrf_token: str | None = Header(default=None),
+) -> dict[str, str | int]:
+    actor = _require_actor_email(
+        request,
+        authorization,
+        csrf_header=x_csrf_token,
+        enforce_csrf=True,
+    )
 
     if payload.threshold_issue_score_warning > payload.threshold_issue_score_critical:
         raise HTTPException(status_code=400, detail="Issue score warning threshold must be <= critical threshold")
@@ -279,8 +375,8 @@ def put_settings(payload: SettingsPayload, authorization: str | None = Header(de
             detail="Critical integration count warning threshold must be <= critical threshold",
         )
 
-    saved = repository.upsert_settings(payload)
-    repository.log_audit(
+    saved = settings_repository.upsert_settings(payload)
+    settings_repository.log_audit(
         actor_email=actor,
         action_type="settings_updated",
         target="settings",
@@ -303,19 +399,29 @@ def put_settings(payload: SettingsPayload, authorization: str | None = Header(de
 
 @app.get("/api/audit-logs", response_model=list[AuditLogEntry])
 def audit_logs(
+    request: Request,
     authorization: str | None = Header(default=None),
     limit: int = Query(default=50, ge=1, le=300),
 ) -> list[AuditLogEntry]:
-    _require_actor_email(authorization)
-    rows = repository.get_audit_logs(limit=limit)
+    _require_actor_email(request, authorization)
+    rows = settings_repository.get_audit_logs(limit=limit)
     return [AuditLogEntry(**row) for row in rows]
 
 
 @app.post("/api/mock-collector/run")
-def run_mock_collector(authorization: str | None = Header(default=None)) -> dict[str, int]:
-    actor = _optional_actor_email(authorization) or "anonymous"
+def run_mock_collector(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    x_csrf_token: str | None = Header(default=None),
+) -> dict[str, int]:
+    actor = _require_actor_email(
+        request,
+        authorization,
+        csrf_header=x_csrf_token,
+        enforce_csrf=True,
+    )
     updated = collector.collect_cycle()
-    repository.log_audit(
+    settings_repository.log_audit(
         actor_email=actor,
         action_type="manual_collector_trigger",
         target="mock_collector",

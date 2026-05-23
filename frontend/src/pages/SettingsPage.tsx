@@ -1,13 +1,11 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
-  clearStoredAdminToken,
   getAuditLogs,
   getAuthStatus,
   getSettings,
-  getStoredAdminToken,
   loginAdmin,
+  logoutAdmin,
   registerAdmin,
-  setStoredAdminToken,
   updateSettings,
 } from "../api";
 import { AuditLogEntry, SettingsPayload } from "../types";
@@ -26,7 +24,6 @@ const DEFAULT_FORM: SettingsPayload = {
 };
 
 export default function SettingsPage() {
-  const [authToken, setAuthToken] = useState<string | null>(getStoredAdminToken());
   const [hasAdmin, setHasAdmin] = useState(false);
   const [authenticatedEmail, setAuthenticatedEmail] = useState<string | null>(null);
   const [registerEmail, setRegisterEmail] = useState("");
@@ -40,9 +37,9 @@ export default function SettingsPage() {
   const [loadingAuthState, setLoadingAuthState] = useState(true);
 
   const loadAuthStatus = useCallback(
-    async (tokenValue?: string | null) => {
+    async () => {
       try {
-        const response = await getAuthStatus(tokenValue ?? authToken);
+        const response = await getAuthStatus();
         setHasAdmin(response.has_admin);
         setAuthenticatedEmail(response.authenticated_email);
 
@@ -52,29 +49,25 @@ export default function SettingsPage() {
           setStatus("Please sign in to access settings");
         }
 
-        if (!response.authenticated_email && (tokenValue ?? authToken)) {
-          clearStoredAdminToken();
-          setAuthToken(null);
-        }
       } catch {
         setStatus("Could not check auth status");
       } finally {
         setLoadingAuthState(false);
       }
     },
-    [authToken]
+    []
   );
 
   useEffect(() => {
-    loadAuthStatus(authToken);
-  }, [authToken, loadAuthStatus]);
+    loadAuthStatus();
+  }, [loadAuthStatus]);
 
   useEffect(() => {
-    if (!authToken || !authenticatedEmail) {
+    if (!authenticatedEmail) {
       return;
     }
 
-    Promise.all([getSettings(authToken), getAuditLogs(authToken, 80)])
+    Promise.all([getSettings(), getAuditLogs(80)])
       .then(([settingsPayload, logsPayload]) => {
         setForm(settingsPayload);
         setAuditLogs(logsPayload);
@@ -83,16 +76,14 @@ export default function SettingsPage() {
       .catch((error) => {
         setStatus(error instanceof Error ? error.message : "Could not load secure settings data");
       });
-  }, [authToken, authenticatedEmail, getAuditLogs, getSettings]);
+  }, [authenticatedEmail, getAuditLogs, getSettings]);
 
   const onRegisterAdmin = async (event: FormEvent) => {
     event.preventDefault();
     setStatus("Creating first admin...");
     try {
-      const response = await registerAdmin({ email: registerEmail, password: registerPassword });
-      setStoredAdminToken(response.token);
-      setAuthToken(response.token);
-      await loadAuthStatus(response.token);
+      await registerAdmin({ email: registerEmail, password: registerPassword });
+      await loadAuthStatus();
       setStatus("First admin created and signed in");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not create admin");
@@ -103,10 +94,8 @@ export default function SettingsPage() {
     event.preventDefault();
     setStatus("Signing in...");
     try {
-      const response = await loginAdmin({ email: loginEmail, password: loginPassword });
-      setStoredAdminToken(response.token);
-      setAuthToken(response.token);
-      await loadAuthStatus(response.token);
+      await loginAdmin({ email: loginEmail, password: loginPassword });
+      await loadAuthStatus();
       setStatus("Signed in successfully");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not login");
@@ -114,17 +103,16 @@ export default function SettingsPage() {
   };
 
   const onLogout = async () => {
-    clearStoredAdminToken();
-    setAuthToken(null);
+    await logoutAdmin();
     setAuthenticatedEmail(null);
     setAuditLogs([]);
     setStatus("Signed out. Please sign in to continue");
-    await loadAuthStatus(null);
+    await loadAuthStatus();
   };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!authToken) {
+    if (!authenticatedEmail) {
       setStatus("Sign in required");
       return;
     }
@@ -142,8 +130,8 @@ export default function SettingsPage() {
     }
     setIsSaving(true);
     try {
-      await updateSettings(form, authToken);
-      const latestLogs = await getAuditLogs(authToken, 80);
+      await updateSettings(form);
+      const latestLogs = await getAuditLogs(80);
       setAuditLogs(latestLogs);
       setStatus("Settings saved successfully");
     } catch (error) {
@@ -206,7 +194,7 @@ export default function SettingsPage() {
     );
   }
 
-  if (!authenticatedEmail || !authToken) {
+  if (!authenticatedEmail) {
     return (
       <section className="page" data-testid="settings-login-page">
         <div className="page-header">
