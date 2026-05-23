@@ -19,9 +19,10 @@ Local proof-of-concept dashboard for monitoring **170 mock Oracle Integration Cl
 6. Deterministic rules engine showing top 3 error recommendations
 7. API latency logging middleware + UI latency panels
 8. Historical health trends (last 30 days) + in-app alert feed with simulated email log output
-9. Settings authentication with first-run local admin creation + audit logs (settings updates, login attempts, manual collector triggers)
-10. Benchmark script for key read endpoints with latency report output
-11. Settings page for future OIC connector configuration (kept abstract)
+9. Configurable alert thresholds in Settings (warning/critical for issue score, missed schedules, and critical integration count)
+10. Settings authentication with first-run local admin creation + audit logs (settings updates, login attempts, manual collector triggers)
+11. Benchmark script for key read endpoints with latency report output
+12. Settings page for future OIC connector configuration (kept abstract)
 
 ## Project Structure
 

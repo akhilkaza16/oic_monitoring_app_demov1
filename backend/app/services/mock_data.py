@@ -141,6 +141,12 @@ def build_seed_dataset(total: int = 170) -> tuple[list[dict], list[dict], dict[s
         "auth_mode": "OAuth2",
         "polling_seconds": "30",
         "notification_email": "ops-team@example.com",
+        "threshold_issue_score_warning": "12",
+        "threshold_issue_score_critical": "18",
+        "threshold_missed_schedules_warning": "3",
+        "threshold_missed_schedules_critical": "5",
+        "threshold_critical_integrations_warning": "20",
+        "threshold_critical_integrations_critical": "35",
     }
 
     return integrations, run_events, settings

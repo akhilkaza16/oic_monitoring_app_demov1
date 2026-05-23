@@ -78,6 +78,12 @@ class SettingsPayload(BaseModel):
     auth_mode: str
     polling_seconds: int = Field(..., ge=10, le=600)
     notification_email: str
+    threshold_issue_score_warning: int = Field(..., ge=1, le=200)
+    threshold_issue_score_critical: int = Field(..., ge=1, le=250)
+    threshold_missed_schedules_warning: int = Field(..., ge=1, le=30)
+    threshold_missed_schedules_critical: int = Field(..., ge=1, le=60)
+    threshold_critical_integrations_warning: int = Field(..., ge=1, le=170)
+    threshold_critical_integrations_critical: int = Field(..., ge=1, le=170)
 
 
 class AuthPayload(BaseModel):
@@ -122,3 +128,5 @@ class AlertEvent(BaseModel):
     simulated_email_to: str
     created_at: datetime
     acknowledged: bool
+    metric_type: str | None = None
+    metric_value: int | None = None

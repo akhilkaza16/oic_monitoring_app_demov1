@@ -103,4 +103,13 @@ def init_database() -> None:
 
     with get_connection() as connection:
         connection.executescript(schema)
+
+        existing_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(alert_events)").fetchall()
+        }
+        if "metric_type" not in existing_columns:
+            connection.execute("ALTER TABLE alert_events ADD COLUMN metric_type TEXT")
+        if "metric_value" not in existing_columns:
+            connection.execute("ALTER TABLE alert_events ADD COLUMN metric_value INTEGER")
+
         connection.commit()

@@ -248,12 +248,36 @@ def get_settings(authorization: str | None = Header(default=None)) -> dict[str, 
         "auth_mode": values.get("auth_mode", "OAuth2"),
         "polling_seconds": int(values.get("polling_seconds", "30")),
         "notification_email": values.get("notification_email", ""),
+        "threshold_issue_score_warning": int(values.get("threshold_issue_score_warning", "12")),
+        "threshold_issue_score_critical": int(values.get("threshold_issue_score_critical", "18")),
+        "threshold_missed_schedules_warning": int(values.get("threshold_missed_schedules_warning", "3")),
+        "threshold_missed_schedules_critical": int(values.get("threshold_missed_schedules_critical", "5")),
+        "threshold_critical_integrations_warning": int(
+            values.get("threshold_critical_integrations_warning", "20")
+        ),
+        "threshold_critical_integrations_critical": int(
+            values.get("threshold_critical_integrations_critical", "35")
+        ),
     }
 
 
 @app.put("/api/settings")
 def put_settings(payload: SettingsPayload, authorization: str | None = Header(default=None)) -> dict[str, str | int]:
     actor = _require_actor_email(authorization)
+
+    if payload.threshold_issue_score_warning > payload.threshold_issue_score_critical:
+        raise HTTPException(status_code=400, detail="Issue score warning threshold must be <= critical threshold")
+    if payload.threshold_missed_schedules_warning > payload.threshold_missed_schedules_critical:
+        raise HTTPException(
+            status_code=400,
+            detail="Missed schedules warning threshold must be <= critical threshold",
+        )
+    if payload.threshold_critical_integrations_warning > payload.threshold_critical_integrations_critical:
+        raise HTTPException(
+            status_code=400,
+            detail="Critical integration count warning threshold must be <= critical threshold",
+        )
+
     saved = repository.upsert_settings(payload)
     repository.log_audit(
         actor_email=actor,
@@ -266,6 +290,12 @@ def put_settings(payload: SettingsPayload, authorization: str | None = Header(de
         "auth_mode": saved["auth_mode"],
         "polling_seconds": int(saved["polling_seconds"]),
         "notification_email": saved["notification_email"],
+        "threshold_issue_score_warning": int(saved["threshold_issue_score_warning"]),
+        "threshold_issue_score_critical": int(saved["threshold_issue_score_critical"]),
+        "threshold_missed_schedules_warning": int(saved["threshold_missed_schedules_warning"]),
+        "threshold_missed_schedules_critical": int(saved["threshold_missed_schedules_critical"]),
+        "threshold_critical_integrations_warning": int(saved["threshold_critical_integrations_warning"]),
+        "threshold_critical_integrations_critical": int(saved["threshold_critical_integrations_critical"]),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 

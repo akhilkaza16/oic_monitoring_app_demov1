@@ -23,6 +23,7 @@ The local proof-of-concept is split into four layers:
    - First-run local admin creation and login
    - Audit logs for login attempts, settings updates, and manual collector triggers
    - Historical trend snapshots and in-app alerts with simulated email logging
+   - Configurable warning/critical thresholds for issue score, missed schedules, and critical integration counts
 
 ## 2) OIC abstraction strategy
 

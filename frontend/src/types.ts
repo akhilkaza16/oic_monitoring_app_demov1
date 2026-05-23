@@ -74,6 +74,12 @@ export interface SettingsPayload {
   auth_mode: string;
   polling_seconds: number;
   notification_email: string;
+  threshold_issue_score_warning: number;
+  threshold_issue_score_critical: number;
+  threshold_missed_schedules_warning: number;
+  threshold_missed_schedules_critical: number;
+  threshold_critical_integrations_warning: number;
+  threshold_critical_integrations_critical: number;
 }
 
 export interface AuthStatus {

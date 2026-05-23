@@ -474,6 +474,21 @@ button:disabled {
   max-width: 540px;
 }
 
+.threshold-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  padding: 0.8rem;
+  border: 1px solid #dce7e5;
+  border-radius: 0.6rem;
+  background: #f8fbfb;
+}
+
+.threshold-grid .section-heading {
+  grid-column: 1 / -1;
+  margin-bottom: 0.2rem;
+}
+
 @media (max-width: 1100px) {
   .trend-bars {
     grid-template-columns: repeat(6, minmax(0, 1fr));

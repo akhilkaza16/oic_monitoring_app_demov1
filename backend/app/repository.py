@@ -24,6 +24,19 @@ class OICRepository:
             if count > 0:
                 trend_count = connection.execute("SELECT COUNT(*) FROM trend_snapshots").fetchone()[0]
                 alert_count = connection.execute("SELECT COUNT(*) FROM alert_events").fetchone()[0]
+                required_settings_defaults = {
+                    "threshold_issue_score_warning": "12",
+                    "threshold_issue_score_critical": "18",
+                    "threshold_missed_schedules_warning": "3",
+                    "threshold_missed_schedules_critical": "5",
+                    "threshold_critical_integrations_warning": "20",
+                    "threshold_critical_integrations_critical": "35",
+                }
+                for key, value in required_settings_defaults.items():
+                    connection.execute(
+                        "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+                        (key, value),
+                    )
                 if trend_count < 30:
                     self._seed_trend_history(connection)
                 if alert_count == 0:
@@ -286,8 +299,9 @@ class OICRepository:
             connection.execute(
                 """
                 INSERT INTO alert_events (
-                  severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
-                ) VALUES (?, ?, ?, ?, ?, ?, 0)
+                  severity, integration_id, title, message, simulated_email_to, created_at, acknowledged,
+                  metric_type, metric_value
+                ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
                 """,
                 (
                     "critical",
@@ -296,12 +310,15 @@ class OICRepository:
                     f"{row['integration_id']} currently has {issue_total} combined critical issue signals.",
                     notify_to,
                     now,
+                    "issue_score",
+                    issue_total,
                 ),
             )
 
     def get_alerts(self, *, limit: int, include_acknowledged: bool) -> list[dict]:
         query = """
-            SELECT id, severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
+            SELECT id, severity, integration_id, title, message, simulated_email_to, created_at, acknowledged,
+                   metric_type, metric_value
             FROM alert_events
         """
         params: list[int] = []
@@ -311,21 +328,45 @@ class OICRepository:
         params.append(limit)
 
         with get_connection() as connection:
+            settings = {row["key"]: row["value"] for row in connection.execute("SELECT key, value FROM settings")}
             rows = connection.execute(query, params).fetchall()
 
-        return [
-            {
-                "id": row["id"],
-                "severity": row["severity"],
-                "integration_id": row["integration_id"],
-                "title": row["title"],
-                "message": row["message"],
-                "simulated_email_to": row["simulated_email_to"],
-                "created_at": datetime.fromisoformat(row["created_at"]),
-                "acknowledged": bool(row["acknowledged"]),
-            }
-            for row in rows
-        ]
+        issue_warning = int(settings.get("threshold_issue_score_warning", "12"))
+        missed_warning = int(settings.get("threshold_missed_schedules_warning", "3"))
+        critical_count_warning = int(settings.get("threshold_critical_integrations_warning", "20"))
+
+        filtered: list[dict] = []
+        for row in rows:
+            metric_type = row["metric_type"]
+            metric_value = row["metric_value"]
+
+            if metric_type == "issue_score" and metric_value is not None and metric_value < issue_warning:
+                continue
+            if metric_type == "missed_schedules" and metric_value is not None and metric_value < missed_warning:
+                continue
+            if (
+                metric_type == "critical_integrations_count"
+                and metric_value is not None
+                and metric_value < critical_count_warning
+            ):
+                continue
+
+            filtered.append(
+                {
+                    "id": row["id"],
+                    "severity": row["severity"],
+                    "integration_id": row["integration_id"],
+                    "title": row["title"],
+                    "message": row["message"],
+                    "simulated_email_to": row["simulated_email_to"],
+                    "created_at": datetime.fromisoformat(row["created_at"]),
+                    "acknowledged": bool(row["acknowledged"]),
+                    "metric_type": metric_type,
+                    "metric_value": metric_value,
+                }
+            )
+
+        return filtered
 
     def acknowledge_alert(self, alert_id: int) -> bool:
         with get_connection() as connection:
@@ -528,6 +569,12 @@ class OICRepository:
             "auth_mode": payload.auth_mode,
             "polling_seconds": str(payload.polling_seconds),
             "notification_email": payload.notification_email,
+            "threshold_issue_score_warning": str(payload.threshold_issue_score_warning),
+            "threshold_issue_score_critical": str(payload.threshold_issue_score_critical),
+            "threshold_missed_schedules_warning": str(payload.threshold_missed_schedules_warning),
+            "threshold_missed_schedules_critical": str(payload.threshold_missed_schedules_critical),
+            "threshold_critical_integrations_warning": str(payload.threshold_critical_integrations_warning),
+            "threshold_critical_integrations_critical": str(payload.threshold_critical_integrations_critical),
         }
         with get_connection() as connection:
             connection.executemany(
@@ -554,6 +601,12 @@ class OICRepository:
                 for row in connection.execute("SELECT key, value FROM settings")
             }
             simulated_email_to = settings.get("notification_email", "ops-team@example.com")
+            issue_warning = int(settings.get("threshold_issue_score_warning", "12"))
+            issue_critical = int(settings.get("threshold_issue_score_critical", "18"))
+            missed_warning = int(settings.get("threshold_missed_schedules_warning", "3"))
+            missed_critical = int(settings.get("threshold_missed_schedules_critical", "5"))
+            critical_count_warning = int(settings.get("threshold_critical_integrations_warning", "20"))
+            critical_count_critical = int(settings.get("threshold_critical_integrations_critical", "35"))
 
             sample_size = max(25, int(len(rows) * 0.2))
             target_rows = rng.sample(list(rows), k=min(sample_size, len(rows)))
@@ -629,15 +682,16 @@ class OICRepository:
                 )
 
                 total_issue_score = failed + conn_errors + timeouts + aborted + missed
-                should_create_alert = next_status == "critical" and total_issue_score >= 18
+                should_create_alert = total_issue_score >= issue_warning
                 if should_create_alert:
                     recent_window = (now - timedelta(minutes=45)).isoformat()
+                    severity = "critical" if total_issue_score >= issue_critical else "warning"
                     existing = connection.execute(
                         """
                         SELECT id
                         FROM alert_events
                         WHERE integration_id = ?
-                          AND severity = 'critical'
+                          AND metric_type = 'issue_score'
                           AND created_at >= ?
                         ORDER BY created_at DESC
                         LIMIT 1
@@ -649,40 +703,93 @@ class OICRepository:
                             """
                             INSERT INTO alert_events (
                               severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
-                            ) VALUES (?, ?, ?, ?, ?, ?, 0)
+                              , metric_type, metric_value
+                            ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
                             """,
                             (
-                                "critical",
+                                severity,
                                 row["integration_id"],
-                                "Integration entered critical state",
+                                "Integration issue score threshold breached",
                                 f"{row['integration_id']} reached issue score {total_issue_score} in latest collector cycle.",
                                 simulated_email_to,
                                 now.isoformat(),
+                                "issue_score",
+                                total_issue_score,
                             ),
                         )
 
-                if missed >= 4:
-                    connection.execute(
+                if missed >= missed_warning:
+                    schedule_severity = "critical" if missed >= missed_critical else "warning"
+                    existing_schedule = connection.execute(
                         """
-                        INSERT INTO alert_events (
-                          severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
-                        ) VALUES (?, ?, ?, ?, ?, ?, 0)
+                        SELECT id
+                        FROM alert_events
+                        WHERE integration_id = ?
+                          AND metric_type = 'missed_schedules'
+                          AND created_at >= ?
+                        ORDER BY created_at DESC
+                        LIMIT 1
                         """,
-                        (
-                            "warning",
-                            row["integration_id"],
-                            "Scheduler reliability warning",
-                            f"{row['integration_id']} has {missed} missed schedules; investigate timing or upstream dependencies.",
-                            simulated_email_to,
-                            now.isoformat(),
-                        ),
-                    )
+                        (row["integration_id"], (now - timedelta(minutes=60)).isoformat()),
+                    ).fetchone()
+                    if existing_schedule is None:
+                        connection.execute(
+                            """
+                            INSERT INTO alert_events (
+                              severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
+                              , metric_type, metric_value
+                            ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+                            """,
+                            (
+                                schedule_severity,
+                                row["integration_id"],
+                                "Scheduler reliability warning",
+                                f"{row['integration_id']} has {missed} missed schedules; investigate timing or upstream dependencies.",
+                                simulated_email_to,
+                                now.isoformat(),
+                                "missed_schedules",
+                                missed,
+                            ),
+                        )
                 updated += 1
 
             cutoff = (now - timedelta(days=3)).isoformat()
             connection.execute("DELETE FROM run_events WHERE event_time < ?", (cutoff,))
             today = now.date().isoformat()
             healthy, warning, critical, unknown = self._status_counts(connection)
+
+            if critical >= critical_count_warning:
+                existing_system = connection.execute(
+                    """
+                    SELECT id
+                    FROM alert_events
+                    WHERE integration_id = 'SYSTEM'
+                      AND metric_type = 'critical_integrations_count'
+                      AND created_at >= ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    ((now - timedelta(minutes=60)).isoformat(),),
+                ).fetchone()
+                if existing_system is None:
+                    severity = "critical" if critical >= critical_count_critical else "warning"
+                    connection.execute(
+                        """
+                        INSERT INTO alert_events (
+                          severity, integration_id, title, message, simulated_email_to, created_at, acknowledged,
+                          metric_type, metric_value
+                        ) VALUES (?, 'SYSTEM', ?, ?, ?, ?, 0, 'critical_integrations_count', ?)
+                        """,
+                        (
+                            severity,
+                            "Critical integration count threshold breached",
+                            f"Critical integrations currently at {critical}, exceeding configured threshold.",
+                            simulated_email_to,
+                            now.isoformat(),
+                            critical,
+                        ),
+                    )
+
             connection.execute(
                 """
                 INSERT OR REPLACE INTO trend_snapshots (

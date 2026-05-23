@@ -17,6 +17,12 @@ const DEFAULT_FORM: SettingsPayload = {
   auth_mode: "OAuth2",
   polling_seconds: 30,
   notification_email: "",
+  threshold_issue_score_warning: 12,
+  threshold_issue_score_critical: 18,
+  threshold_missed_schedules_warning: 3,
+  threshold_missed_schedules_critical: 5,
+  threshold_critical_integrations_warning: 20,
+  threshold_critical_integrations_critical: 35,
 };
 
 export default function SettingsPage() {
@@ -112,6 +118,18 @@ export default function SettingsPage() {
     event.preventDefault();
     if (!authToken) {
       setStatus("Sign in required");
+      return;
+    }
+    if (form.threshold_issue_score_warning > form.threshold_issue_score_critical) {
+      setStatus("Issue score warning threshold must be less than or equal to critical threshold");
+      return;
+    }
+    if (form.threshold_missed_schedules_warning > form.threshold_missed_schedules_critical) {
+      setStatus("Missed schedule warning threshold must be less than or equal to critical threshold");
+      return;
+    }
+    if (form.threshold_critical_integrations_warning > form.threshold_critical_integrations_critical) {
+      setStatus("Critical integration count warning must be less than or equal to critical threshold");
       return;
     }
     setIsSaving(true);
@@ -290,6 +308,118 @@ export default function SettingsPage() {
             data-testid="settings-email-input"
           />
         </label>
+
+        <section className="threshold-grid" data-testid="settings-threshold-grid">
+          <h3 className="section-heading" data-testid="settings-threshold-heading">
+            Alert Threshold Configuration (Warning / Critical)
+          </h3>
+
+          <label className="field">
+            <span data-testid="threshold-issue-warning-label">Issue Score Warning</span>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={form.threshold_issue_score_warning}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  threshold_issue_score_warning: Number(event.target.value),
+                }))
+              }
+              data-testid="threshold-issue-warning-input"
+            />
+          </label>
+
+          <label className="field">
+            <span data-testid="threshold-issue-critical-label">Issue Score Critical</span>
+            <input
+              type="number"
+              min={1}
+              max={250}
+              value={form.threshold_issue_score_critical}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  threshold_issue_score_critical: Number(event.target.value),
+                }))
+              }
+              data-testid="threshold-issue-critical-input"
+            />
+          </label>
+
+          <label className="field">
+            <span data-testid="threshold-missed-warning-label">Missed Schedules Warning</span>
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={form.threshold_missed_schedules_warning}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  threshold_missed_schedules_warning: Number(event.target.value),
+                }))
+              }
+              data-testid="threshold-missed-warning-input"
+            />
+          </label>
+
+          <label className="field">
+            <span data-testid="threshold-missed-critical-label">Missed Schedules Critical</span>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={form.threshold_missed_schedules_critical}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  threshold_missed_schedules_critical: Number(event.target.value),
+                }))
+              }
+              data-testid="threshold-missed-critical-input"
+            />
+          </label>
+
+          <label className="field">
+            <span data-testid="threshold-critical-count-warning-label">
+              Critical Integration Count Warning
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={170}
+              value={form.threshold_critical_integrations_warning}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  threshold_critical_integrations_warning: Number(event.target.value),
+                }))
+              }
+              data-testid="threshold-critical-count-warning-input"
+            />
+          </label>
+
+          <label className="field">
+            <span data-testid="threshold-critical-count-critical-label">
+              Critical Integration Count Critical
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={170}
+              value={form.threshold_critical_integrations_critical}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  threshold_critical_integrations_critical: Number(event.target.value),
+                }))
+              }
+              data-testid="threshold-critical-count-critical-input"
+            />
+          </label>
+        </section>
 
         <div className="actions-inline">
           <button
