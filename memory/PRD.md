@@ -27,6 +27,8 @@ User-selected scope:
 - Webhook notification adapter added with configurable URL/token, warning+critical alert triggers, and retry/backoff delivery behavior.
 - Webhook monitoring added via dedicated Notifications page (summary counters, status filters, delivery table, 30s auto-refresh).
 - Retry policy controls added to Settings (max retries, initial backoff, timeout) with conservative guardrails.
+- Round-2 code quality hardening completed: active repositories now use `secrets.SystemRandom`, collector cycle logic split into focused helpers, and large settings UI sections extracted into dedicated components.
+- Legacy `_legacy_monolith_repository.py` retained and frozen (no active development path).
 
 ## What Has Been Implemented
 - Seed generation and load of 170 integrations across projects/domains with simulated health states.
@@ -55,6 +57,8 @@ User-selected scope:
 - Manual mock collector trigger endpoint and standalone worker script (`backend/mock_collector.py`).
 - Benchmark script (`scripts/benchmark.py`) covering summary/list/detail plus backend latency log output.
 - Documentation updated: README + architecture notes (`docs/ARCHITECTURE.md`).
+- 2026-05-23: Applied second code-review remediation pass (P0/P1): removed hardcoded password in reset test flow, corrected literal identity assertions (`is`→boolean/equality-safe assertions), refactored `collector_repository.collect_mock_cycle`, modularized `SettingsPage` into auth/threshold/audit components, and tightened React hook dependency arrays across flagged pages.
+- 2026-05-23: Full backend + frontend regression completed via testing agent (`/app/test_reports/iteration_9.json`) with 100% pass status and no open issues.
 
 ## Prioritized Backlog
 ### P0 (Must Have Next)
@@ -76,3 +80,4 @@ User-selected scope:
 1. Add stronger account recovery safeguards (reset attempt throttling + verification challenge).
 2. Add session visibility API (list active sessions with issued/expiry metadata).
 3. Add notification history retention policies (pruning + archival controls).
+4. Optional future enhancement: per-webhook health scoring and consecutive failure alert badges on Notifications page.
