@@ -1,2 +1,97 @@
-# oic_monitoring_app_demov1
-This is a oic monitoring app code repo
+# badger-oic-monitor
+
+Local proof-of-concept dashboard for monitoring **170 mock Oracle Integration Cloud (OIC) integrations** with Badger branding.
+
+## Stack
+
+- Frontend: React + Vite + TypeScript
+- Backend: FastAPI
+- Database: SQLite
+- Worker: Python mock collector
+
+## Features
+
+1. Seeded dataset with 170 integrations across multiple projects and business domains
+2. Simulated health states: healthy, warning, critical, unknown
+3. Simulated failures: failed instances, connection errors, timeouts, aborted runs, missed schedules
+4. Executive dashboard with health score, counts, critical incidents, top failing integrations
+5. Integration list and integration detail pages
+6. Deterministic rules engine showing top 3 error recommendations
+7. API latency logging middleware + UI latency panels
+8. Benchmark script for key read endpoints with latency report output
+9. Settings page for future OIC connector configuration (kept abstract)
+
+## Project Structure
+
+```bash
+/app
+├── backend
+│   ├── app
+│   ├── mock_collector.py
+│   ├── requirements.txt
+│   └── server.py
+├── frontend
+│   ├── src
+│   ├── package.json
+│   └── vite.config.ts
+├── docs
+│   └── ARCHITECTURE.md
+└── scripts
+    └── benchmark.py
+```
+
+## Local Setup
+
+### 1) Backend
+
+```bash
+cd /app/backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+```
+
+### 2) Mock Collector Worker (separate terminal)
+
+```bash
+cd /app/backend
+source .venv/bin/activate
+python mock_collector.py
+```
+
+### 3) Frontend
+
+```bash
+cd /app/frontend
+yarn install
+yarn dev
+```
+
+### 4) Open App
+
+- Frontend: `http://localhost:3000`
+- Backend API base: `http://localhost:8001`
+
+## Quick API Checks
+
+```bash
+curl -s http://localhost:8001/api/health
+curl -s http://localhost:8001/api/executive-summary
+curl -s "http://localhost:8001/api/integrations?limit=5&offset=0"
+```
+
+## Run Benchmark
+
+```bash
+cd /app/backend
+source .venv/bin/activate
+python /app/scripts/benchmark.py --base-url http://localhost:8001/api --runs 10
+```
+
+The benchmark reports average, p95, and max latency for summary, list, and detail endpoints, and prints recent backend latency logs.
+
+## Architecture Notes
+
+See `docs/ARCHITECTURE.md`.
+
