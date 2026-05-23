@@ -23,6 +23,7 @@ User-selected scope:
 - Repository split initiated: auth and settings/audit persistence moved into dedicated repositories.
 - Security domain expanded with password reset and session lifecycle controls.
 - Repository domain split expanded to dedicated alerts/integrations/trends/latency/collector repository layers.
+- Legacy `repository.py` converted into a lightweight compatibility shim delegating to domain repositories.
 
 ## What Has Been Implemented
 - Seed generation and load of 170 integrations across projects/domains with simulated health states.
@@ -44,6 +45,7 @@ User-selected scope:
 - Added password reset flow with one-time on-screen reset code and 60-minute expiry.
 - Added server-side session revocation: auto-revoke previous sessions on new login + manual revoke-all endpoint.
 - Added dedicated Security page for reset-code request/confirm and revoke-all sessions control.
+- Completed deconstruction of monolith repository runtime path by routing backend logic through domain repositories.
 - API latency logs endpoint + visual latency panels on dashboard/detail.
 - Manual mock collector trigger endpoint and standalone worker script (`backend/mock_collector.py`).
 - Benchmark script (`scripts/benchmark.py`) covering summary/list/detail plus backend latency log output.
@@ -66,6 +68,6 @@ User-selected scope:
 3. Add side-by-side comparison of current vs previous collector cycle deltas.
 
 ## Next Tasks
-1. Continue refactoring legacy `repository.py` internals into fully independent domain repositories (remove remaining monolith logic).
-2. Add optional webhook adapter (while keeping current email-log mode for local operation).
-3. Add stronger account recovery safeguards (reset attempt throttling + verification challenge).
+1. Add optional webhook adapter (while keeping current email-log mode for local operation).
+2. Add stronger account recovery safeguards (reset attempt throttling + verification challenge).
+3. Add session visibility API (list active sessions with issued/expiry metadata).
