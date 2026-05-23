@@ -1,28 +1,49 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowClockwise } from "@phosphor-icons/react";
-import { getExecutiveSummary, getLatencyLogs, runMockCollectorCycle } from "../api";
-import { ExecutiveSummary, LatencyLog } from "../types";
+import {
+  acknowledgeAlert,
+  getAlerts,
+  getExecutiveSummary,
+  getLatencyLogs,
+  getStoredAdminToken,
+  getTrendSnapshots,
+  runMockCollectorCycle,
+} from "../api";
+import { AlertEvent, ExecutiveSummary, LatencyLog, TrendSnapshot } from "../types";
 import { LatencyPanel } from "../components/LatencyPanel";
 import { MetricCard } from "../components/MetricCard";
 import { StatusBadge } from "../components/StatusBadge";
 
+function severityClass(severity: AlertEvent["severity"]): string {
+  if (severity === "critical") return "status-critical";
+  if (severity === "warning") return "status-warning";
+  return "status-unknown";
+}
+
 export default function ExecutiveDashboardPage() {
   const [summary, setSummary] = useState<ExecutiveSummary | null>(null);
   const [latencyLogs, setLatencyLogs] = useState<LatencyLog[]>([]);
+  const [trends, setTrends] = useState<TrendSnapshot[]>([]);
+  const [alerts, setAlerts] = useState<AlertEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isAcknowledging, setIsAcknowledging] = useState<number | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("-");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setError(null);
-      const [summaryData, latencyData] = await Promise.all([
+      const [summaryData, latencyData, trendData, alertData] = await Promise.all([
         getExecutiveSummary(),
         getLatencyLogs(undefined, 8),
+        getTrendSnapshots(30),
+        getAlerts(12),
       ]);
       setSummary(summaryData);
       setLatencyLogs(latencyData.reverse());
+      setTrends(trendData);
+      setAlerts(alertData);
       setLastUpdated(new Date().toLocaleTimeString());
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Failed loading dashboard");
@@ -40,12 +61,31 @@ export default function ExecutiveDashboardPage() {
   const triggerCollector = async () => {
     setIsRefreshing(true);
     try {
-      await runMockCollectorCycle();
+      await runMockCollectorCycle(getStoredAdminToken());
       await load();
     } finally {
       setIsRefreshing(false);
     }
   };
+
+  const onAcknowledgeAlert = async (alertId: number) => {
+    const token = getStoredAdminToken();
+    if (!token) {
+      setError("Login from Settings page to acknowledge alerts.");
+      return;
+    }
+    setIsAcknowledging(alertId);
+    try {
+      await acknowledgeAlert(alertId, token);
+      await load();
+    } catch (ackError) {
+      setError(ackError instanceof Error ? ackError.message : "Could not acknowledge alert");
+    } finally {
+      setIsAcknowledging(null);
+    }
+  };
+
+  const maxTrendScore = Math.max(...trends.map((entry) => entry.health_score), 1);
 
   if (isLoading) {
     return (
@@ -147,6 +187,72 @@ export default function ExecutiveDashboardPage() {
             </section>
 
             <LatencyPanel logs={latencyLogs} title="API Latency (Recent)" testId="dashboard-latency-panel" />
+          </div>
+
+          <div className="page-grid" data-testid="trend-alert-grid">
+            <section className="card" data-testid="health-trend-panel">
+              <h3 className="section-heading" data-testid="health-trend-heading">
+                Health Trend (Last 30 Days)
+              </h3>
+              <div className="trend-bars" data-testid="health-trend-bars">
+                {trends.map((point, index) => (
+                  <div className="trend-bar-wrap" key={point.snapshot_date} data-testid={`trend-point-${index}`}>
+                    <div
+                      className="trend-bar"
+                      style={{ height: `${Math.max(8, (point.health_score / maxTrendScore) * 100)}%` }}
+                    />
+                    <p className="trend-score" data-testid={`trend-score-${index}`}>
+                      {point.health_score.toFixed(1)}
+                    </p>
+                    <p className="trend-date" data-testid={`trend-date-${index}`}>
+                      {point.snapshot_date.slice(5)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="card" data-testid="alerts-panel">
+              <h3 className="section-heading" data-testid="alerts-heading">
+                Active Alerts + Email Simulation Log
+              </h3>
+              <div className="stack" data-testid="alerts-list">
+                {alerts.length === 0 && (
+                  <p className="muted" data-testid="alerts-empty-message">
+                    No active alerts.
+                  </p>
+                )}
+                {alerts.map((alert) => (
+                  <article key={alert.id} className="alert-item" data-testid={`alert-item-${alert.id}`}>
+                    <div className="alert-top-row">
+                      <span
+                        className={`status-badge ${severityClass(alert.severity)}`}
+                        data-testid={`alert-severity-${alert.id}`}
+                      >
+                        {alert.severity}
+                      </span>
+                      <button
+                        className="button-secondary"
+                        onClick={() => onAcknowledgeAlert(alert.id)}
+                        disabled={isAcknowledging === alert.id}
+                        data-testid={`alert-acknowledge-button-${alert.id}`}
+                      >
+                        {isAcknowledging === alert.id ? "Acknowledging" : "Acknowledge"}
+                      </button>
+                    </div>
+                    <p className="integration-name" data-testid={`alert-title-${alert.id}`}>
+                      {alert.title} · {alert.integration_id}
+                    </p>
+                    <p className="muted" data-testid={`alert-message-${alert.id}`}>
+                      {alert.message}
+                    </p>
+                    <p className="muted" data-testid={`alert-email-log-${alert.id}`}>
+                      Email simulated to {alert.simulated_email_to} at {new Date(alert.created_at).toLocaleString()}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </section>
           </div>
         </>
       )}

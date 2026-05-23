@@ -1,6 +1,7 @@
 # Test Credentials
 
-This application currently has no authentication flow and no user accounts.
+## badger-oic-monitor
 
-- Auth-required credentials: N/A
-- Test email/password: N/A
+- Admin Email: admin@badger.local
+- Admin Password: BadgerPass123!
+- Notes: First-run local admin account created from Settings page auth bootstrap flow.

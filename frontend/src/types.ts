@@ -75,3 +75,49 @@ export interface SettingsPayload {
   polling_seconds: number;
   notification_email: string;
 }
+
+export interface AuthStatus {
+  has_admin: boolean;
+  authenticated_email: string | null;
+}
+
+export interface AuthPayload {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  email: string;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  actor_email: string | null;
+  action_type: string;
+  target: string;
+  details: string;
+  created_at: string;
+}
+
+export interface TrendSnapshot {
+  snapshot_date: string;
+  healthy_count: number;
+  warning_count: number;
+  critical_count: number;
+  unknown_count: number;
+  health_score: number;
+}
+
+export type AlertSeverity = "critical" | "warning" | "info";
+
+export interface AlertEvent {
+  id: number;
+  severity: AlertSeverity;
+  integration_id: string;
+  title: string;
+  message: string;
+  simulated_email_to: string;
+  created_at: string;
+  acknowledged: boolean;
+}

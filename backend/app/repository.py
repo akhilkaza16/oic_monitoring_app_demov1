@@ -5,7 +5,16 @@ from datetime import datetime, timedelta, timezone
 
 from app.database import get_connection
 from app.models import IntegrationSummary, RunEvent, SettingsPayload
+from app.services.auth_service import hash_password, verify_password
 from app.services.mock_data import build_seed_dataset
+
+
+def _compute_health_score(*, healthy: int, warning: int, critical: int, unknown: int) -> float:
+    total = healthy + warning + critical + unknown
+    if total == 0:
+        return 0.0
+    weighted = healthy * 1.0 + warning * 0.6 + critical * 0.2 + unknown * 0.4
+    return round((weighted / total) * 100, 2)
 
 
 class OICRepository:
@@ -13,6 +22,14 @@ class OICRepository:
         with get_connection() as connection:
             count = connection.execute("SELECT COUNT(*) FROM integrations").fetchone()[0]
             if count > 0:
+                trend_count = connection.execute("SELECT COUNT(*) FROM trend_snapshots").fetchone()[0]
+                alert_count = connection.execute("SELECT COUNT(*) FROM alert_events").fetchone()[0]
+                if trend_count < 30:
+                    self._seed_trend_history(connection)
+                if alert_count == 0:
+                    self._seed_initial_alerts(connection)
+                connection.commit()
+                self.record_daily_snapshot()
                 return
 
             integrations, run_events, settings = build_seed_dataset(total)
@@ -65,6 +82,8 @@ class OICRepository:
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                 [(key, value) for key, value in settings.items()],
             )
+            self._seed_trend_history(connection)
+            self._seed_initial_alerts(connection)
             connection.commit()
 
     def _row_to_summary(self, row) -> IntegrationSummary:
@@ -148,6 +167,245 @@ class OICRepository:
                 )
             ]
         return {"projects": projects, "business_domains": domains}
+
+    def _status_counts(self, connection) -> tuple[int, int, int, int]:
+        grouped_rows = connection.execute(
+            "SELECT status, COUNT(*) AS count FROM integrations GROUP BY status"
+        ).fetchall()
+        grouped = {row["status"]: row["count"] for row in grouped_rows}
+        return (
+            grouped.get("healthy", 0),
+            grouped.get("warning", 0),
+            grouped.get("critical", 0),
+            grouped.get("unknown", 0),
+        )
+
+    def _seed_trend_history(self, connection) -> None:
+        healthy, warning, critical, unknown = self._status_counts(connection)
+        rng = random.Random(30)
+        total = healthy + warning + critical + unknown
+        today = datetime.now(timezone.utc).date()
+
+        for days_ago in range(29, -1, -1):
+            day = today - timedelta(days=days_ago)
+            drift = max(1, int((days_ago / 30) * 6))
+            day_critical = max(5, min(total // 3, critical + rng.randint(-drift, drift)))
+            day_warning = max(10, min(total // 2, warning + rng.randint(-drift * 2, drift * 2)))
+            day_unknown = max(3, min(total // 5, unknown + rng.randint(-2, 2)))
+            day_healthy = max(0, total - day_critical - day_warning - day_unknown)
+
+            score = _compute_health_score(
+                healthy=day_healthy,
+                warning=day_warning,
+                critical=day_critical,
+                unknown=day_unknown,
+            )
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO trend_snapshots (
+                  snapshot_date, healthy_count, warning_count, critical_count,
+                  unknown_count, health_score, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    day.isoformat(),
+                    day_healthy,
+                    day_warning,
+                    day_critical,
+                    day_unknown,
+                    score,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+
+    def record_daily_snapshot(self) -> None:
+        today = datetime.now(timezone.utc).date().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
+        with get_connection() as connection:
+            healthy, warning, critical, unknown = self._status_counts(connection)
+            score = _compute_health_score(
+                healthy=healthy,
+                warning=warning,
+                critical=critical,
+                unknown=unknown,
+            )
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO trend_snapshots (
+                  snapshot_date, healthy_count, warning_count, critical_count,
+                  unknown_count, health_score, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (today, healthy, warning, critical, unknown, score, now),
+            )
+            connection.commit()
+
+    def get_trend_snapshots(self, days: int) -> list[dict]:
+        start_day = (datetime.now(timezone.utc).date() - timedelta(days=days - 1)).isoformat()
+        with get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT snapshot_date, healthy_count, warning_count, critical_count, unknown_count, health_score
+                FROM trend_snapshots
+                WHERE snapshot_date >= ?
+                ORDER BY snapshot_date ASC
+                """,
+                (start_day,),
+            ).fetchall()
+        return [
+            {
+                "snapshot_date": row["snapshot_date"],
+                "healthy_count": row["healthy_count"],
+                "warning_count": row["warning_count"],
+                "critical_count": row["critical_count"],
+                "unknown_count": row["unknown_count"],
+                "health_score": row["health_score"],
+            }
+            for row in rows
+        ]
+
+    def _seed_initial_alerts(self, connection) -> None:
+        settings = {
+            row["key"]: row["value"]
+            for row in connection.execute("SELECT key, value FROM settings")
+        }
+        notify_to = settings.get("notification_email", "ops-team@example.com")
+        rows = connection.execute(
+            """
+            SELECT integration_id, failed_instances, timeouts, connection_errors
+            FROM integrations
+            WHERE status = 'critical'
+            ORDER BY (failed_instances + timeouts + connection_errors) DESC
+            LIMIT 5
+            """
+        ).fetchall()
+
+        now = datetime.now(timezone.utc).isoformat()
+        for row in rows:
+            issue_total = row["failed_instances"] + row["timeouts"] + row["connection_errors"]
+            connection.execute(
+                """
+                INSERT INTO alert_events (
+                  severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
+                ) VALUES (?, ?, ?, ?, ?, ?, 0)
+                """,
+                (
+                    "critical",
+                    row["integration_id"],
+                    "Critical integration health alert",
+                    f"{row['integration_id']} currently has {issue_total} combined critical issue signals.",
+                    notify_to,
+                    now,
+                ),
+            )
+
+    def get_alerts(self, *, limit: int, include_acknowledged: bool) -> list[dict]:
+        query = """
+            SELECT id, severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
+            FROM alert_events
+        """
+        params: list[int] = []
+        if not include_acknowledged:
+            query += " WHERE acknowledged = 0"
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        with get_connection() as connection:
+            rows = connection.execute(query, params).fetchall()
+
+        return [
+            {
+                "id": row["id"],
+                "severity": row["severity"],
+                "integration_id": row["integration_id"],
+                "title": row["title"],
+                "message": row["message"],
+                "simulated_email_to": row["simulated_email_to"],
+                "created_at": datetime.fromisoformat(row["created_at"]),
+                "acknowledged": bool(row["acknowledged"]),
+            }
+            for row in rows
+        ]
+
+    def acknowledge_alert(self, alert_id: int) -> bool:
+        with get_connection() as connection:
+            cursor = connection.execute(
+                "UPDATE alert_events SET acknowledged = 1 WHERE id = ?",
+                (alert_id,),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
+
+    def log_audit(self, *, actor_email: str | None, action_type: str, target: str, details: str) -> None:
+        with get_connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO audit_logs (actor_email, action_type, target, details, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    actor_email,
+                    action_type,
+                    target,
+                    details,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+            connection.commit()
+
+    def get_audit_logs(self, *, limit: int) -> list[dict]:
+        with get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, actor_email, action_type, target, details, created_at
+                FROM audit_logs
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "actor_email": row["actor_email"],
+                "action_type": row["action_type"],
+                "target": row["target"],
+                "details": row["details"],
+                "created_at": datetime.fromisoformat(row["created_at"]),
+            }
+            for row in rows
+        ]
+
+    def has_admin_user(self) -> bool:
+        with get_connection() as connection:
+            count = connection.execute("SELECT COUNT(*) FROM admin_users").fetchone()[0]
+        return count > 0
+
+    def create_first_admin(self, *, email: str, password: str) -> str:
+        if self.has_admin_user():
+            raise ValueError("Admin already exists")
+
+        password_hash, salt = hash_password(password)
+        with get_connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO admin_users (email, password_hash, salt, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (email.lower().strip(), password_hash, salt, datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+        return email.lower().strip()
+
+    def verify_admin_credentials(self, *, email: str, password: str) -> bool:
+        with get_connection() as connection:
+            row = connection.execute(
+                "SELECT password_hash, salt FROM admin_users WHERE email = ?",
+                (email.lower().strip(),),
+            ).fetchone()
+        if row is None:
+            return False
+        return verify_password(password, row["password_hash"], row["salt"])
 
     def get_integration_detail(self, integration_id: str) -> tuple[IntegrationSummary, str, list[RunEvent]] | None:
         with get_connection() as connection:
@@ -291,6 +549,12 @@ class OICRepository:
             if not rows:
                 return 0
 
+            settings = {
+                row["key"]: row["value"]
+                for row in connection.execute("SELECT key, value FROM settings")
+            }
+            simulated_email_to = settings.get("notification_email", "ops-team@example.com")
+
             sample_size = max(25, int(len(rows) * 0.2))
             target_rows = rng.sample(list(rows), k=min(sample_size, len(rows)))
 
@@ -363,10 +627,84 @@ class OICRepository:
                         message,
                     ),
                 )
+
+                total_issue_score = failed + conn_errors + timeouts + aborted + missed
+                should_create_alert = next_status == "critical" and total_issue_score >= 18
+                if should_create_alert:
+                    recent_window = (now - timedelta(minutes=45)).isoformat()
+                    existing = connection.execute(
+                        """
+                        SELECT id
+                        FROM alert_events
+                        WHERE integration_id = ?
+                          AND severity = 'critical'
+                          AND created_at >= ?
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                        """,
+                        (row["integration_id"], recent_window),
+                    ).fetchone()
+                    if existing is None:
+                        connection.execute(
+                            """
+                            INSERT INTO alert_events (
+                              severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
+                            ) VALUES (?, ?, ?, ?, ?, ?, 0)
+                            """,
+                            (
+                                "critical",
+                                row["integration_id"],
+                                "Integration entered critical state",
+                                f"{row['integration_id']} reached issue score {total_issue_score} in latest collector cycle.",
+                                simulated_email_to,
+                                now.isoformat(),
+                            ),
+                        )
+
+                if missed >= 4:
+                    connection.execute(
+                        """
+                        INSERT INTO alert_events (
+                          severity, integration_id, title, message, simulated_email_to, created_at, acknowledged
+                        ) VALUES (?, ?, ?, ?, ?, ?, 0)
+                        """,
+                        (
+                            "warning",
+                            row["integration_id"],
+                            "Scheduler reliability warning",
+                            f"{row['integration_id']} has {missed} missed schedules; investigate timing or upstream dependencies.",
+                            simulated_email_to,
+                            now.isoformat(),
+                        ),
+                    )
                 updated += 1
 
             cutoff = (now - timedelta(days=3)).isoformat()
             connection.execute("DELETE FROM run_events WHERE event_time < ?", (cutoff,))
+            today = now.date().isoformat()
+            healthy, warning, critical, unknown = self._status_counts(connection)
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO trend_snapshots (
+                  snapshot_date, healthy_count, warning_count, critical_count,
+                  unknown_count, health_score, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    today,
+                    healthy,
+                    warning,
+                    critical,
+                    unknown,
+                    _compute_health_score(
+                        healthy=healthy,
+                        warning=warning,
+                        critical=critical,
+                        unknown=unknown,
+                    ),
+                    now.isoformat(),
+                ),
+            )
             connection.commit()
 
         return updated

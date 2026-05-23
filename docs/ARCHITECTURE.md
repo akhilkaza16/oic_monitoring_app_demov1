@@ -19,6 +19,10 @@ The local proof-of-concept is split into four layers:
    - Persisted settings
 4. **Mock collector worker**
    - Simulates changing integration health every cycle
+5. **Settings security + observability**
+   - First-run local admin creation and login
+   - Audit logs for login attempts, settings updates, and manual collector triggers
+   - Historical trend snapshots and in-app alerts with simulated email logging
 
 ## 2) OIC abstraction strategy
 
@@ -37,6 +41,10 @@ Primary tables:
 - `run_events`: time-series execution history
 - `latency_logs`: endpoint/method/request-latency tracking
 - `settings`: future OIC configuration values
+- `admin_users`: local admin credentials (hashed password + salt)
+- `audit_logs`: security/activity trail
+- `trend_snapshots`: daily health distribution snapshots
+- `alert_events`: in-app alerts and simulated email notification records
 
 ## 4) Monitoring behavior
 

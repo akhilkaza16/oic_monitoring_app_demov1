@@ -61,6 +61,44 @@ def init_database() -> None:
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      actor_email TEXT,
+      action_type TEXT NOT NULL,
+      target TEXT NOT NULL,
+      details TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS trend_snapshots (
+      snapshot_date TEXT PRIMARY KEY,
+      healthy_count INTEGER NOT NULL,
+      warning_count INTEGER NOT NULL,
+      critical_count INTEGER NOT NULL,
+      unknown_count INTEGER NOT NULL,
+      health_score REAL NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS alert_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      severity TEXT NOT NULL,
+      integration_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      simulated_email_to TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      acknowledged INTEGER NOT NULL DEFAULT 0
+    );
     """
 
     with get_connection() as connection:

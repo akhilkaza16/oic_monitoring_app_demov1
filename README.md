@@ -18,8 +18,10 @@ Local proof-of-concept dashboard for monitoring **170 mock Oracle Integration Cl
 5. Integration list and integration detail pages
 6. Deterministic rules engine showing top 3 error recommendations
 7. API latency logging middleware + UI latency panels
-8. Benchmark script for key read endpoints with latency report output
-9. Settings page for future OIC connector configuration (kept abstract)
+8. Historical health trends (last 30 days) + in-app alert feed with simulated email log output
+9. Settings authentication with first-run local admin creation + audit logs (settings updates, login attempts, manual collector triggers)
+10. Benchmark script for key read endpoints with latency report output
+11. Settings page for future OIC connector configuration (kept abstract)
 
 ## Project Structure
 
@@ -79,7 +81,14 @@ yarn dev
 curl -s http://localhost:8001/api/health
 curl -s http://localhost:8001/api/executive-summary
 curl -s "http://localhost:8001/api/integrations?limit=5&offset=0"
+curl -s http://localhost:8001/api/auth/status
 ```
+
+## First-Run Settings Access
+
+1. Open the **Settings** page in the frontend.
+2. If no admin exists, create the first local admin account.
+3. Use those credentials for future login to protected settings and audit logs.
 
 ## Run Benchmark
 

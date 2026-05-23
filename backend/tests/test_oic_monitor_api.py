@@ -30,6 +30,8 @@ def _load_base_url() -> str:
 
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/") or _load_base_url()
+ADMIN_EMAIL = "admin@badger.local"
+ADMIN_PASSWORD = "BadgerPass123!"
 
 
 @pytest.fixture()
@@ -115,7 +117,7 @@ def test_integration_detail_contains_top_3_recommendations(api_client: requests.
 
 def test_latency_logs_capture_middleware_entries(api_client: requests.Session) -> None:
     # Feature: middleware latency logging and retrieval
-    for path in ["/api/executive-summary", "/api/integrations?limit=1&offset=0", "/api/settings"]:
+    for path in ["/api/executive-summary", "/api/integrations?limit=1&offset=0", "/api/auth/status"]:
         resp = api_client.get(f"{BASE_URL}{path}", timeout=20)
         assert resp.status_code == 200
 
@@ -129,8 +131,30 @@ def test_latency_logs_capture_middleware_entries(api_client: requests.Session) -
 
 
 def test_settings_get_and_put_persist(api_client: requests.Session) -> None:
-    # Feature: settings load and save persistence
-    get_resp = api_client.get(f"{BASE_URL}/api/settings", timeout=20)
+    # Feature: settings auth + load and save persistence
+    status_resp = api_client.get(f"{BASE_URL}/api/auth/status", timeout=20)
+    assert status_resp.status_code == 200
+    if not status_resp.json()["has_admin"]:
+        register_resp = api_client.post(
+            f"{BASE_URL}/api/auth/register-admin",
+            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+            timeout=20,
+        )
+        assert register_resp.status_code == 200
+        token = register_resp.json()["token"]
+    else:
+        login_resp = api_client.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+            timeout=20,
+        )
+        if login_resp.status_code != 200:
+            pytest.skip("Skipping settings persistence test: admin credentials unavailable for authenticated flow")
+        token = login_resp.json()["token"]
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    get_resp = api_client.get(f"{BASE_URL}/api/settings", headers=headers, timeout=20)
     assert get_resp.status_code == 200
     before = get_resp.json()
 
@@ -140,7 +164,7 @@ def test_settings_get_and_put_persist(api_client: requests.Session) -> None:
         "polling_seconds": 45,
         "notification_email": "monitoring-team@example.com",
     }
-    put_resp = api_client.put(f"{BASE_URL}/api/settings", json=update_payload, timeout=20)
+    put_resp = api_client.put(f"{BASE_URL}/api/settings", json=update_payload, headers=headers, timeout=20)
     assert put_resp.status_code == 200
     updated = put_resp.json()
     assert updated["oic_base_url"] == update_payload["oic_base_url"]
@@ -149,7 +173,7 @@ def test_settings_get_and_put_persist(api_client: requests.Session) -> None:
     assert updated["notification_email"] == update_payload["notification_email"]
     assert "updated_at" in updated
 
-    verify_resp = api_client.get(f"{BASE_URL}/api/settings", timeout=20)
+    verify_resp = api_client.get(f"{BASE_URL}/api/settings", headers=headers, timeout=20)
     assert verify_resp.status_code == 200
     after = verify_resp.json()
     assert after["oic_base_url"] == update_payload["oic_base_url"]
@@ -158,7 +182,7 @@ def test_settings_get_and_put_persist(api_client: requests.Session) -> None:
     assert after["notification_email"] == update_payload["notification_email"]
 
     # Restore original settings to keep tests non-invasive
-    restore_resp = api_client.put(f"{BASE_URL}/api/settings", json=before, timeout=20)
+    restore_resp = api_client.put(f"{BASE_URL}/api/settings", json=before, headers=headers, timeout=20)
     assert restore_resp.status_code == 200
 
 

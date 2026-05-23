@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 StatusType = Literal["healthy", "warning", "critical", "unknown"]
+AlertSeverity = Literal["critical", "warning", "info"]
 
 
 class IntegrationSummary(BaseModel):
@@ -77,3 +78,47 @@ class SettingsPayload(BaseModel):
     auth_mode: str
     polling_seconds: int = Field(..., ge=10, le=600)
     notification_email: str
+
+
+class AuthPayload(BaseModel):
+    email: str
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class AuthStatusResponse(BaseModel):
+    has_admin: bool
+    authenticated_email: str | None
+
+
+class AuthResponse(BaseModel):
+    token: str
+    email: str
+
+
+class AuditLogEntry(BaseModel):
+    id: int
+    actor_email: str | None
+    action_type: str
+    target: str
+    details: str
+    created_at: datetime
+
+
+class TrendSnapshot(BaseModel):
+    snapshot_date: str
+    healthy_count: int
+    warning_count: int
+    critical_count: int
+    unknown_count: int
+    health_score: float
+
+
+class AlertEvent(BaseModel):
+    id: int
+    severity: AlertSeverity
+    integration_id: str
+    title: str
+    message: str
+    simulated_email_to: str
+    created_at: datetime
+    acknowledged: bool
