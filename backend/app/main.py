@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +19,18 @@ from app.repository import OICRepository
 from app.services.oic_interface import MockOICCollector, OICCollectorInterface
 from app.services.rules_engine import build_recommendations
 
-app = FastAPI(title="badger-oic-monitor", version="0.1.0")
+repository = OICRepository()
+collector: OICCollectorInterface = MockOICCollector(repository)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_database()
+    repository.seed_if_empty(total=170)
+    yield
+
+
+app = FastAPI(title="badger-oic-monitor", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,15 +39,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-repository = OICRepository()
-collector: OICCollectorInterface = MockOICCollector(repository)
-
-
-@app.on_event("startup")
-def startup() -> None:
-    init_database()
-    repository.seed_if_empty(total=170)
 
 
 @app.middleware("http")
@@ -142,7 +145,7 @@ def put_settings(payload: SettingsPayload) -> dict[str, str | int]:
         "auth_mode": saved["auth_mode"],
         "polling_seconds": int(saved["polling_seconds"]),
         "notification_email": saved["notification_email"],
-        "updated_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
