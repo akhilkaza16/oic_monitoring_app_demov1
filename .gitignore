@@ -5,3 +5,10 @@ __pycache__/
 node_modules/
 dist/
 backend/data/*.db
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
